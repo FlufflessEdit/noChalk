@@ -1,0 +1,81 @@
+/*  noCHalk
+      by Fluffless
+      theme.css
+*/
+
+:root {
+  --bg: #eae4d6;
+  --panel: #f8f5ee;
+  --panel2: #c7c7c7;
+  --paper: #ffffff;
+  --ch: #d8d1c0;
+  --ink: #28231c;
+  --ink2: #7a7161;
+  --acc: #4a4a4a;
+  --acc2: #404040;
+  --ok: #4c8a4c;
+  --hov: rgba(60, 45, 20, 0.07);
+  --inv: #28231c;
+  --invtx: #f6f2ea;
+  --sel: rgba(50, 50, 50, 0.5);
+}
+
+[data-theme="dark"] {
+  --bg: #1b1b1b; /* app backdrop, section tab row */
+  --panel: #242424; /* topbar, pages pane, toolbar, dialogs */
+  --panel2: #3f3f3f; /* section tabs, segmented button groups */
+  --paper: #464646; /* input fields, picker cells, handle rings */
+  --ch: #565656; /* hairlines, dividers, scrollbars */
+  --ink: #d4d4d4; /* primary text */
+  --ink2: #979797; /* muted text, inactive buttons */
+  --acc: #b3b3b3; /* accent — selection outlines, active icons, caret */
+  --acc2: #8f8f8f; /* primary-button hover */
+  --hov: rgba(255, 255, 255, 0.08);
+  --inv: #d4d4d4; /* floating pills */
+  --invtx: #1b1b1b;
+  --sel: rgba(255, 255, 255, 0.16);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Roboto, "Segoe UI", sans-serif;
+  font-size: 14px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ch) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ch);
+  border-radius: 6px;
+  border: 2px solid var(--panel);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
