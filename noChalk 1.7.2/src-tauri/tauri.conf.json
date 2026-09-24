@@ -1,0 +1,22 @@
+{
+  "productName": "noChalk",
+  "version": "1.7.1",
+  "identifier": "com.fluffless.nochalk",
+  "build": { "frontendDist": "../src" },
+"app": {
+  "windows": [
+    {
+      "title": "noChalk",
+      "width": 1400,
+      "height": 900,
+      "minWidth": 800,
+      "minHeight": 500,
+      "maximized": true,
+      "dragDropEnabled": false
+    }
+  ],
+    "security": { "csp": null, "assetProtocol": { "enable": true, "scope": ["**"] } },
+    "withGlobalTauri": true
+  },
+  "bundle": { "active": false, "icon": ["icons/icon.ico"] }
+}
