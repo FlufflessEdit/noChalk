@@ -1,0 +1,15 @@
+﻿Question;Correct Answer;Wrong Answer 1;Wrong Answer 2;Wrong Answer 3;Time in seconds;Image / Video (optional);Type
+"So wird gespielt:
+
+Hör dir die Worte ""Ich liebe dich!"" in verschiedenen Sprachen an und rate, welche Sprache es ist!";;;;;300;https://media.kahoot.it/4e03a332-c933-494d-bffe-707318e3844b;info
+Je t'aime!;Französisch;Portugiesisch;Niederländisch;Spanisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/fr-FR/W_8eOECTyDXqRM7wdDQ8Kw==/88336a509407a541e18effabc8c6a24adcb7f890122a7282915b205c9e7e9388;
+Ti amo!;Italienisch;Spanisch;Lateinisch;Rumänisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/it-IT/804n5bAfHv4FjONqzGwBsA==/9eaf23ebcf9fdcda5ef6e3354d4f041969e6e87d72c5a6d50e67cba50c0af480;
+¡Te amo!;Spanisch;Portugiesisch;Italienisch;Rumänisch;20;https://apis.kahoot.it/audio-service/api/v1/audio/1/es-MX/E2PCMSThmZyWQpdr7INezw==/dfc5e551d76589e255ba6617366997a663c6dab8028d2e2772f926464d0ec0fd;
+Jeg elsker deg!;Norwegisch;Schwedisch;Dänisch;Flämisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/nb-NO/-VrL-T8wpPhwaKb2SmETrA==/d54a68533496c022f80119b4953a918bb5ba8a909fb80b82af2ab5a541e24eb9;
+Ik houd van je!;Niederländisch;Deutsch;Serbisch;Dänisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/nl-NL/BgE2XWqfggAzHsdg8T_I7A==/e95ccd33879f2179fc36fb03925792a87344c745982efe2cc8ab8c20ce721fbd;
+Minä rakastan sinua!;Finnisch;Estnisch;Lettisch;Ungarisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/fi-FI/7cc7Ev8Rzq1PUY0h5R1P9JMX1T6oDb6EulaLazXvzVA=/f4d3133394bca5dce9565b1ff80370b21ad684e6b8efd6959dd84669590d5d4a;
+я тебе люблю!;Ukrainisch;Mongolisch;Russisch;Bulgarisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/uk-UA/MH7q8mDVhRYqXorCjG85bdEODrqbFkpaM6T55sdiLt4=/028fd5a22267ab2dbf4c8a51ff1d30ff59d367ada98768f6378362873d01c77c;
+Ich liebe dich!;Deutsch;Polnisch;Schwedisch;Griechisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/de-DE/vbpJtJ8xfsDnS_rsFezygw==/7f41eae6720545c5f8fabd9ced2ae05fe4aa3f3012fb8ecacff3c3c65605902f;
+我愛你!;Chinesisch;Japanisch;Koreanisch;Nepali;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/zh-TW/TBXlPD_aX3r1M-BBIJ_hTA==/e55f964e7f8df395e1b3c23842e1af18cb4dec5d59dd32e51857d84d555beef2;
+أحبك;Arabisch;Hebräisch;Aramäisch;Türkisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/ar-SA/VtjAkp5OAUtah_yVDltHFZxj4fjQAKJu3PYnUY3ea3I=/c81d2dacb5aab752472493ee192414c1649284f2d4e8922a57cb2fabe1996c98;
+Aku cinta kamu!;Indonesisch;Thai;Vietnamesisch;Malaiisch;30;https://apis.kahoot.it/audio-service/api/v1/audio/1/id-ID/OxaMyegajYvh3aGcYWg6Jw==/c032c9d86d9b9eca6514d698ab58f22fcf7d3282646e274ef35f5967bcb9c22a;
