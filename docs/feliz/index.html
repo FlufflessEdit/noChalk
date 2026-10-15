@@ -329,12 +329,25 @@ body.ingame #chrome {
 }
 .joinurl {
   font-family: var(--mono);
-  font-size: 0.72rem;
-  color: var(--ink2);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300px;
+  width: min(100%, 300px);
+  text-align: center;
+}
+
+.joincode {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(2.6rem, 5vw, 3.6rem);
+  letter-spacing: 0.12em;
+  line-height: 1.05;
+  color: var(--ink);
+  width: min(100%, 300px);
+  text-align: center;
 }
 .waitcol {
   display: flex;
@@ -355,7 +368,7 @@ body.ingame #chrome {
 #playerCount {
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 1.9rem;
+  font-size: 2.4rem;
   color: var(--ink);
 }
 .pcount small {
@@ -3622,7 +3635,7 @@ html {
   border-radius: 14px;
   padding: 6px;
   width: 100%;
-  max-width: 460px;
+  max-width: 480px;
 }
 .tabbtn {
   flex: 1;
@@ -3693,8 +3706,8 @@ html {
   gap: 16px;
 }
 .cycbtn {
-  width: 40px;
-  height: 40px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: var(--panel2);
   display: grid;
@@ -3709,8 +3722,8 @@ html {
   transform: translateY(-1px);
 }
 .cycbtn .ic {
-  width: 18px;
-  height: 18px;
+  width: 12px;
+  height: 12px;
   color: var(--ink2);
 }
 
@@ -3725,7 +3738,7 @@ html {
   height: 27px;
   border-radius: 50%;
   flex: none;
-  box-shadow: inset 0 0 0 2px var(--bg);
+
   transition:
     transform 0.15s,
     box-shadow 0.15s;
@@ -4089,11 +4102,11 @@ html {
             <div class="lbl">Scan to join</div>
             <div class="qrtile"><canvas id="qrCanvas" width="300" height="300"></canvas></div>
             <div class="joinurl" id="joinUrl"></div>
+            <div class="joincode" id="joinCode"></div>
           </aside>
           <main class="waitcol">
             <div class="phead">
-              <div class="lbl">Players in the lobby</div>
-              <div class="pcount"><span id="playerCount">0</span><small>in</small></div>
+              <div class="pcount"><span id="playerCount">0</span></div>
             </div>
             <div class="pgrid" id="playerGrid"></div>
             <div class="startrow">
@@ -6265,6 +6278,10 @@ function joinBase() {
 function joinHostText() {
   return joinBase().replace(/^https?:\/\//, "");
 }
+function updateJoinTexts() {
+  $("#joinUrl").textContent = joinHostText();
+  $("#joinCode").textContent = G.code;
+}
 function updateJoinHint() {
   const el2 = $("#joinHint");
   if (el2)
@@ -6281,7 +6298,7 @@ function enterLobby() {
   show("scr-lobby");
   const base = location.href.split("#")[0];
   G.joinURL = joinBase() + "/#join=" + G.code;
-  $("#joinUrl").textContent = joinHostText() + "  ·  Code " + G.code;
+  updateJoinTexts();
   drawQR(G.joinURL);
   updateJoinHint();
   renderLobby();
@@ -6324,7 +6341,7 @@ function setupPeer(retry) {
       } catch (_) {}
       G.code = makeCode();
       G.joinURL = joinBase() + "/#join=" + G.code;
-      $("#joinUrl").textContent = joinHostText() + "  ·  Code " + G.code;
+      updateJoinTexts();
       drawQR(G.joinURL);
       setupPeer(retry + 1);
       return;
