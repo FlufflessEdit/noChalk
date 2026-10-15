@@ -3747,6 +3747,48 @@ html {
   height: 72%;
   color: #1b1b1b;
 }
+/* ===== identity card v2: colours · adjective row · animal row ===== */
+.adjcycle {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.adjval {
+  font-weight: 800;
+  font-size: 1.2rem;
+  min-width: 10px;
+  max-width: 240px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* button row: dice icon only + join fills the remaining width */
+.cbtns {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  justify-content: center;
+}
+.joinbox .cbtns {
+  width: 100%;
+}
+.cbtns .pill.dice {
+  flex: none;
+  padding: 13px 17px;
+}
+.cbtns .pill.grow {
+  flex: 1;
+  justify-content: center;
+}
+
+/* client join screen: room field, card and buttons share one width */
+#c-join .croom,
+#c-join .namecard,
+#c-join .cbtns {
+  width: min(400px, 100%);
+}
 
 </style>
 <!-- END css/style.css -->
@@ -3888,6 +3930,16 @@ html {
               <div class="lbl">Room code</div>
               <input class="roominput" id="tabRoomInput" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false" />
               <div class="namecard">
+                <div class="cdots" id="tabColors"></div>
+                <div class="adjcycle">
+                  <button class="cycbtn" id="tabAdjPrev" title="Previous adjective">
+                    <svg class="ic"><use href="#i-left" /></svg>
+                  </button>
+                  <div class="adjval" id="tabAdj"></div>
+                  <button class="cycbtn" id="tabAdjNext" title="Next adjective">
+                    <svg class="ic"><use href="#i-right" /></svg>
+                  </button>
+                </div>
                 <div class="avcycle">
                   <button class="cycbtn" id="tabPrev" title="Previous animal">
                     <svg class="ic"><use href="#i-left" /></svg>
@@ -3898,15 +3950,14 @@ html {
                   </button>
                 </div>
                 <div class="cn" id="tabName"></div>
-                <small>Browse animals with the arrows – the dice rolls a new adjective.</small>
-                <div class="cdots" id="tabColors"></div>
+                <small>Arrows step through adjectives and animals – the dice rolls colour, adjective and animal.</small>
               </div>
               <div class="cbtns">
-                <button class="pill" id="tabReroll">
-                  <svg class="ic"><use href="#i-dice" /></svg>New adjective
+                <button class="pill dice" id="tabReroll" title="Roll colour, adjective and animal">
+                  <svg class="ic"><use href="#i-dice" /></svg>
                 </button>
-                <button class="pill" id="tabJoin">
-                  <svg class="ic"><use href="#i-play" /></svg>Join
+                <button class="pill grow" id="tabJoin">
+                  <svg class="ic"><use href="#i-play" /></svg><span>Join</span>
                 </button>
               </div>
               <div class="cstatus" id="tabStatus"></div>
@@ -4109,17 +4160,22 @@ html {
     <!-- ====== Client UI (player device) ====== -->
     <div id="client" hidden>
       <div class="cscr" id="c-join">
-        <div class="cbrand">
-          <div class="logo">
-            <svg><use href="#a-logo" /></svg>
-          </div>
-          <b>Feliz</b>
-        </div>
+        <div class="cbrand"><!-- … unverändert … --></div>
         <div class="croom">
           <div class="lbl">Room code</div>
           <input class="roominput" id="cjRoomInput" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" spellcheck="false" />
         </div>
         <div class="namecard">
+          <div class="cdots" id="cjColors"></div>
+          <div class="adjcycle">
+            <button class="cycbtn" id="cjAdjPrev" title="Previous adjective">
+              <svg class="ic"><use href="#i-left" /></svg>
+            </button>
+            <div class="adjval" id="cjAdj"></div>
+            <button class="cycbtn" id="cjAdjNext" title="Next adjective">
+              <svg class="ic"><use href="#i-right" /></svg>
+            </button>
+          </div>
           <div class="avcycle">
             <button class="cycbtn" id="cjPrev" title="Previous animal">
               <svg class="ic"><use href="#i-left" /></svg>
@@ -4130,15 +4186,14 @@ html {
             </button>
           </div>
           <div class="cn" id="cjName"></div>
-          <small>Browse animals with the arrows – the dice rolls a new adjective.</small>
-          <div class="cdots" id="cjColors"></div>
+          <small>Arrows step through adjectives and animals – the dice rolls colour, adjective and animal.</small>
         </div>
         <div class="cbtns">
-          <button class="pill" id="btnReroll">
-            <svg class="ic"><use href="#i-dice" /></svg>New adjective
+          <button class="pill dice" id="btnReroll" title="Roll colour, adjective and animal">
+            <svg class="ic"><use href="#i-dice" /></svg>
           </button>
-          <button class="pill" id="btnJoin">
-            <svg class="ic"><use href="#i-play" /></svg>Join
+          <button class="pill grow" id="btnJoin">
+            <svg class="ic"><use href="#i-play" /></svg><span>Join</span>
           </button>
         </div>
         <div class="cstatus" id="cjStatus"></div>
@@ -8166,6 +8221,12 @@ function renderIdentity() {
   if (!C.my) return;
   $("#cjName").textContent = C.my.name;
   $("#tabName").textContent = C.my.name;
+  const setAdj = (sel) => {
+    const n = $(sel);
+    if (n) n.textContent = C.my.adj;
+  };
+  setAdj("#cjAdj");
+  setAdj("#tabAdj");
   const bg = C.my.color || "var(--paper)";
   [["#cjAva"], ["#tabAva"]].forEach(([sel]) => {
     const a = $(sel);
@@ -8193,17 +8254,44 @@ async function loadIdentity() {
   C.my.name = C.my.adj + " " + animalName(C.my.animal);
   renderIdentity();
 }
-/* dice: only the adjective rolls, the animal stays */
-function rollAdj() {
+/* adjective: step through the list, the animal stays */
+function cycleAdj(dir) {
   if (!C.my) {
     propose();
     return;
   }
-  C.my.adj = rnd(ADJ);
+  let idx = ADJ.indexOf(C.my.adj);
+  idx = ((idx < 0 ? 0 : idx) + dir + ADJ.length) % ADJ.length;
+  C.my.adj = ADJ[idx];
   C.my.name = C.my.adj + " " + animalName(C.my.animal);
   renderIdentity();
   saveIdentity();
   SFX.select();
+}
+
+/* dice: rolls all three – colour, adjective, animal */
+function rerollAll() {
+  if (!C.my) {
+    propose();
+    return;
+  }
+  C.my.adj = rndOther(ADJ, C.my.adj);
+  const pool = animalPool();
+  if (pool.length) C.my.animal = rndOther(pool, C.my.animal);
+  C.my.color = rndOther(COLORS, C.my.color);
+  C.my.name = C.my.adj + " " + animalName(C.my.animal);
+  renderIdentity();
+  saveIdentity();
+  SFX.select();
+}
+
+/* random pick that avoids repeating the current value */
+function rndOther(arr, cur) {
+  if (!arr || arr.length < 2) return cur;
+  let v = rnd(arr),
+    n = 0;
+  while (v === cur && n++ < 8) v = rnd(arr);
+  return v;
 }
 /* full random (first visit) */
 function propose() {
@@ -8728,9 +8816,12 @@ function showWaageQuestion() {
   SFX.intro();
 }
 /* ---- buttons ---- */
-$("#btnReroll").addEventListener("click", rollAdj);
+$("#btnReroll").addEventListener("click", rerollAll);
+$("#cjAdjPrev").addEventListener("click", () => cycleAdj(-1));
+$("#cjAdjNext").addEventListener("click", () => cycleAdj(1));
 $("#cjPrev").addEventListener("click", () => cycleAnimal(-1));
 $("#cjNext").addEventListener("click", () => cycleAnimal(1));
+
 $("#btnJoin").addEventListener("click", joinNow);
 $("#cjRoomInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinNow();
@@ -8846,7 +8937,9 @@ function setTab(name) {
 document.querySelectorAll(".tabbtn").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 /* join directly from the start page (Join tab) */
-$("#tabReroll").addEventListener("click", rollAdj);
+$("#tabReroll").addEventListener("click", rerollAll);
+$("#tabAdjPrev").addEventListener("click", () => cycleAdj(-1));
+$("#tabAdjNext").addEventListener("click", () => cycleAdj(1));
 $("#tabPrev").addEventListener("click", () => cycleAnimal(-1));
 $("#tabNext").addEventListener("click", () => cycleAnimal(1));
 $("#tabJoin").addEventListener("click", joinFromTab);
