@@ -3613,6 +3613,140 @@ html {
   width: 18px;
   height: 18px;
 }
+/* ===== Join-UI: Tabs, Identitätskarte, Tier-Pfeile, Farbauswahl ===== */
+.tabbar {
+  display: flex;
+  gap: 6px;
+  background: var(--panel);
+  border: 1px solid var(--ch);
+  border-radius: 14px;
+  padding: 6px;
+  width: 100%;
+  max-width: 460px;
+}
+.tabbtn {
+  flex: 1;
+  padding: 11px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink2);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.tabbtn:hover {
+  color: var(--ink);
+}
+.tabbtn.on {
+  background: var(--inv);
+  color: var(--invtx);
+}
+.tabpane {
+  display: none;
+  width: 100%;
+}
+.tabpane.on {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.joinbox {
+  width: min(460px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--ch);
+  border-radius: 20px;
+  padding: 26px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.roominput {
+  width: 100%;
+  background: var(--paper);
+  border: 1px solid var(--ch);
+  border-radius: 12px;
+  padding: 13px 16px;
+  color: var(--ink);
+  font: inherit;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 1.45rem;
+  letter-spacing: 0.22em;
+  text-align: center;
+  text-transform: uppercase;
+  outline: none;
+}
+.roominput:focus {
+  border-color: var(--acc);
+}
+.roominput::placeholder {
+  color: var(--ink2);
+}
+
+.avcycle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.cycbtn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--panel2);
+  display: grid;
+  place-items: center;
+  flex: none;
+  transition:
+    background 0.15s,
+    transform 0.15s;
+}
+.cycbtn:hover {
+  background: var(--paper);
+  transform: translateY(-1px);
+}
+.cycbtn .ic {
+  width: 18px;
+  height: 18px;
+  color: var(--ink2);
+}
+
+.cdots {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.cdot {
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: inset 0 0 0 2px var(--bg);
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.cdot:hover {
+  transform: scale(1.14);
+}
+.cdot.sel {
+  transform: scale(1.2);
+  box-shadow:
+    inset 0 0 0 2px var(--bg),
+    0 0 0 2px var(--inv);
+}
+
+/* normalized animal svgs: every one has viewBox 0 0 100 100 –
+   a single percentage rule fits every circle size */
+.pav svg {
+  width: 72%;
+  height: 72%;
+  color: #1b1b1b;
+}
 
 </style>
 <!-- END css/style.css -->
@@ -3676,7 +3810,7 @@ html {
       </symbol>
       <symbol id="i-copy" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <rect x="8.5" y="8.5" width="11" height="11" rx="2" />
-        <path d="M12 4v11M7 10l5 5 5-5M4.5 19.5h15" />
+        <path d="M5.5 15.5h-1a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1 1v1" />
       </symbol>
       <symbol id="i-shuffle" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4" />
@@ -3758,7 +3892,7 @@ html {
                   <button class="cycbtn" id="tabPrev" title="Previous animal">
                     <svg class="ic"><use href="#i-left" /></svg>
                   </button>
-                  <span class="pav" id="tabAva" style="background: var(--paper)"><img src="svg/cat.svg" alt="" draggable="false" /></span>
+                  <span class="pav" id="tabAva" style="background: var(--paper)"></span>
                   <button class="cycbtn" id="tabNext" title="Next animal">
                     <svg class="ic"><use href="#i-right" /></svg>
                   </button>
@@ -3990,7 +4124,7 @@ html {
             <button class="cycbtn" id="cjPrev" title="Previous animal">
               <svg class="ic"><use href="#i-left" /></svg>
             </button>
-            <span class="pav" id="cjAva" style="background: var(--paper)"><img src="svg/cat.svg" alt="" draggable="false" /></span>
+            <span class="pav" id="cjAva" style="background: var(--paper)"></span>
             <button class="cycbtn" id="cjNext" title="Next animal">
               <svg class="ic"><use href="#i-right" /></svg>
             </button>
@@ -4010,7 +4144,7 @@ html {
         <div class="cstatus" id="cjStatus"></div>
       </div>
       <div class="cscr" id="c-wait">
-        <span class="pav" id="cwAva" style="background: var(--paper)"><img src="svg/cat.svg" alt="" draggable="false" /></span>
+        <span class="pav" id="cwAva" style="background: var(--paper)"></span>
         <div class="cn" id="cwName"></div>
         <div class="st" id="cwStatus">You're in!</div>
         <span class="pulse"></span>
@@ -4037,7 +4171,7 @@ html {
       <div class="cscr" id="c-end">
         <svg class="ic big"><use href="#i-trophy" /></svg>
         <div class="ert" id="endRank"></div>
-        <span class="pav" id="endAva" style="background: var(--paper)"><img src="svg/cat.svg" alt="" draggable="false" /></span>
+        <span class="pav" id="endAva" style="background: var(--paper)"></span>
         <div class="cn" id="endName"></div>
         <div class="st" id="endPts"></div>
         <div class="top3" id="endList"></div>
@@ -4416,12 +4550,86 @@ const ADJ = [
   "Earnest",
 ];
 
-const COLORS = ["#7048e8", "#1368ce", "#0b8185", "#26890c", "#94ea1d", "#ffa602", "#e8590c", "#e21b3c", "#b32672", "#f500d8"];
+const COLORS = ["#7048e8", "#1368ce", "#0b8185", "#26890c", "#94ea1d", "#ffa602", "#e8590c", "#e21b3c", "#f500d8"];
 /* ---- animal pool: loaded from the svg folder ---- */
-const AV = { list: null };
+const AV = { list: null, svg: {}, pending: {} };
+
+/* last-resort candidates for the probe – extend to match your svg/ folder.
+   Better: create svg/animals.json – then no probing happens at all.     */
+const FALLBACK_ANIMALS = [
+  "cat",
+  "dog",
+  "fox",
+  "panda",
+  "bear",
+  "owl",
+  "frog",
+  "duck",
+  "penguin",
+  "rabbit",
+  "tiger",
+  "lion",
+  "elephant",
+  "giraffe",
+  "zebra",
+  "monkey",
+  "pig",
+  "cow",
+  "horse",
+  "sheep",
+  "chicken",
+  "mouse",
+  "bat",
+  "bee",
+  "butterfly",
+  "fish",
+  "shark",
+  "whale",
+  "octopus",
+  "crab",
+  "turtle",
+  "snake",
+  "lizard",
+  "dragon",
+  "unicorn",
+  "wolf",
+  "deer",
+  "koala",
+  "kangaroo",
+  "sloth",
+  "otter",
+  "raccoon",
+  "flamingo",
+  "hedgehog",
+  "squirrel",
+  "hamster",
+  "goat",
+  "donkey",
+  "camel",
+  "crocodile",
+  "hippo",
+  "rhino",
+  "peacock",
+  "parrot",
+  "eagle",
+  "crow",
+  "seagull",
+  "dolphin",
+  "seal",
+  "snail",
+  "spider",
+  "ant",
+  "ladybug",
+  "dragonfly",
+  "bison",
+  "moose",
+  "lynx",
+  "leopard",
+];
+
 async function loadAnimals() {
   if (AV.list) return AV.list;
-  /* 1) manifest svg/animals.json */
+  /* 1) manifest svg/animals.json (names with or without .svg) */
   try {
     const res = await fetch("svg/animals.json");
     if (res.ok) {
@@ -4430,9 +4638,10 @@ async function loadAnimals() {
       if (arr && arr.length) {
         AV.list = arr
           .map(String)
+          .map((s) => s.trim().replace(/\.svg$/i, ""))
           .filter((s) => /^[a-z0-9_-]+$/i.test(s))
           .sort();
-        return AV.list;
+        if (AV.list.length) return AV.list;
       }
     }
   } catch (e) {}
@@ -4445,7 +4654,7 @@ async function loadAnimals() {
         const doc = new DOMParser().parseFromString(await res.text(), "html");
         const base = new URL("svg/", location.href);
         const out = [];
-        for (const a of doc.querySelectorAll("a[href]") ?? []) {
+        for (const a of doc.querySelectorAll("a[href]")) {
           const href = a.getAttribute("href");
           if (!href || /^(https?:|\?|#|mailto:)/i.test(href)) continue;
           let raw = "";
@@ -4465,10 +4674,120 @@ async function loadAnimals() {
       }
     }
   } catch (e) {}
-  /* 3) nothing found – the pool comes ONLY from the svg folder */
+  /* 3) FIX: probe which candidate files actually exist –
+        works on static hosts without directory listing,      */
+  const found = await probeAnimals(FALLBACK_ANIMALS);
+  if (found.length) {
+    AV.list = found;
+    return found;
+  }
   AV.list = [];
-  console.warn("[Feliz] svg/animals.json and the svg/ listing are both unreachable – animal pool is empty.");
+  console.warn("[Feliz] no animal pool found – create svg/animals.json listing your svg files.");
   return AV.list;
+}
+
+/* fetch one svg once, normalize it, cache the markup */
+function fetchAnimalSvg(animal) {
+  if (!animal || !/^[a-z0-9_-]+$/i.test(animal)) return Promise.resolve(null);
+  if (AV.svg[animal] !== undefined) return Promise.resolve(AV.svg[animal]);
+  if (AV.pending[animal]) return AV.pending[animal];
+  AV.pending[animal] = (async () => {
+    let markup = null;
+    try {
+      const res = await fetch("svg/" + encodeURIComponent(animal) + ".svg");
+      if (res.ok) {
+        const txt = await res.text();
+        if (/<svg[\s>]/i.test(txt)) markup = normalizeAnimalSvg(txt);
+      }
+    } catch (e) {}
+    AV.svg[animal] = markup;
+    delete AV.pending[animal];
+    return markup;
+  })();
+  return AV.pending[animal];
+}
+async function probeAnimals(names) {
+  const out = [];
+  await Promise.all(
+    names.map(async (n) => {
+      if (await fetchAnimalSvg(n)) out.push(n);
+    }),
+  );
+  return out.sort();
+}
+
+/* placeholder if a file is missing */
+const AV_FALLBACK_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="70" text-anchor="middle" font-family="Outfit,sans-serif" font-size="62" font-weight="700" fill="currentColor">?</text></svg>';
+
+/* THE SIZE FIX: every animal gets the same viewBox (0 0 100 100) with its
+   content tightly cropped, scaled and centred – no matter what size,
+   viewBox or padding the source file has. One CSS rule then fits all.   */
+function normalizeAnimalSvg(txt) {
+  let doc = null;
+  try {
+    doc = new DOMParser().parseFromString(txt, "image/svg+xml");
+  } catch (e) {}
+  const svg = doc && doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg") return null;
+
+  const wAttr = parseFloat(svg.getAttribute("width") || "") || 0;
+  const hAttr = parseFloat(svg.getAttribute("height") || "") || 0;
+  svg.removeAttribute("width");
+  svg.removeAttribute("height");
+  if (!svg.getAttribute("viewBox")) {
+    const w = wAttr || hAttr || 100,
+      h = hAttr || wAttr || 100;
+    svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+  }
+
+  /* measure the real content box (offscreen, but rendered) */
+  const probe = el("div");
+  probe.style.cssText = "position:fixed;left:-4000px;top:0;pointer-events:none";
+  probe.appendChild(svg);
+  document.body.appendChild(probe);
+  let bb = null;
+  try {
+    bb = svg.getBBox();
+  } catch (e) {
+    bb = null;
+  }
+  probe.remove();
+  if (!bb || !isFinite(bb.width) || !isFinite(bb.height) || bb.width <= 0 || bb.height <= 0) {
+    const v = (svg.getAttribute("viewBox") || "0 0 100 100")
+      .trim()
+      .split(/[\s,]+/)
+      .map(Number);
+    bb = { x: v[0] || 0, y: v[1] || 0, width: v[2] || 100, height: v[3] || 100 };
+  }
+
+  /* crop to bb, then scale + centre into 0 0 100 100 with a small margin */
+  const PAD = 4;
+  const avail = 100 - PAD * 2;
+  const s = Math.min(avail / bb.width, avail / bb.height);
+  const tx = PAD + (avail - bb.width * s) / 2 - bb.x * s;
+  const ty = PAD + (avail - bb.height * s) / 2 - bb.y * s;
+  const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  g.setAttribute("transform", "translate(" + tx.toFixed(2) + "," + ty.toFixed(2) + ") scale(" + s.toFixed(4) + ")");
+  while (svg.firstChild) g.appendChild(svg.firstChild);
+  svg.appendChild(g);
+  svg.setAttribute("viewBox", "0 0 100 100");
+  return new XMLSerializer().serializeToString(svg);
+}
+
+/* put a (normalized) animal svg into any container – cached, safe to
+   call repeatedly; fast animal switching simply overwrites           */
+function setAvatar(container, animal) {
+  if (!container) return;
+  container.dataset.animal = animal || "";
+  if (!animal) {
+    container.innerHTML = AV_FALLBACK_SVG;
+    return;
+  }
+  fetchAnimalSvg(animal).then((markup) => {
+    if (container.dataset.animal !== animal) return; /* switched away meanwhile */
+    container.innerHTML = markup || AV_FALLBACK_SVG;
+  });
 }
 
 function animalName(id) {
@@ -4484,13 +4803,14 @@ function randomName(taken = new Set()) {
     const nm = rnd(ADJ) + " " + animalName(an);
     if (!taken.has(nm)) return { name: nm, animal: an };
   }
-  return { name: "Player " + (10 + Math.floor(Math.random() * 90)), animal: pool[0] };
+  return { name: "Player " + (10 + Math.floor(Math.random() * 90)), animal: pool[0] || "cat" };
 }
 
+/* host-side avatars: no longer sprite symbols – normalized inline svg */
 function avEl(p) {
   const s = el("span", "pav");
-  s.style.background = p.color || "var(--paper)";
-  s.innerHTML = '<svg><use href="#a-' + p.animal + '"/></svg>';
+  s.style.background = p.color || p.wColor || "var(--paper)";
+  setAvatar(s, p.animal);
   return s;
 }
 
@@ -6029,14 +6349,16 @@ function onJoin(conn, m) {
       name = alt.name;
       animal = alt.animal;
     } else if (!animal) {
-      animal = rnd(ANIMALS).id;
+      const pool = animalPool();
+      animal = pool.length ? rnd(pool) : "cat"; /* FIX: ANIMALS was never defined */
     }
     p = {
       id: "p" + ++seq,
       conn,
       name,
       animal,
-      color: COLORS[G.players.length % COLORS.length],
+      /* FIX: honour the colour the player picked on their device */
+      color: typeof m.color === "string" && COLORS.includes(m.color) ? m.color : COLORS[G.players.length % COLORS.length],
       bot: false,
       skill: 0,
       score: 0,
@@ -7844,12 +8166,13 @@ function renderIdentity() {
   if (!C.my) return;
   $("#cjName").textContent = C.my.name;
   $("#tabName").textContent = C.my.name;
-  const setAva = (sel) => {
-    const ava = $(sel);
-    if (ava) ava.innerHTML = '<img src="svg/' + C.my.animal + '.svg" alt="" draggable="false">';
-  };
-  setAva("#cjAva");
-  setAva("#tabAva");
+  const bg = C.my.color || "var(--paper)";
+  [["#cjAva"], ["#tabAva"]].forEach(([sel]) => {
+    const a = $(sel);
+    if (!a) return;
+    a.style.background = bg; /* show the chosen colour immediately */
+    setAvatar(a, C.my.animal);
+  });
   document.querySelectorAll(".cdot").forEach((d) => d.classList.toggle("sel", d.dataset.color === C.my.color));
 }
 function saveIdentity() {
@@ -8091,10 +8414,15 @@ function onServer(m) {
     case "welcome": {
       stopRetry();
       C.me = m;
-      if (COLORS.includes(m.color)) C.my.color = m.color;
+      if (COLORS.includes(m.color)) {
+        C.my.color = m.color;
+        saveIdentity();
+      }
+      document.querySelectorAll(".cdot").forEach((d) => d.classList.toggle("sel", d.dataset.color === C.my.color));
       $("#cwName").textContent = m.name;
       const ava = $("#cwAva");
       ava.style.background = m.color || "var(--paper)";
+      setAvatar(ava, m.animal);
       ava.innerHTML = '<img src="svg/' + m.animal + '.svg" alt="" draggable="false">';
       $("#cwStatus").textContent = "You're in! Waiting for the host to start …";
       showC("c-wait");
@@ -8242,6 +8570,7 @@ function onServer(m) {
         $("#endPts").textContent = m.you.score.toLocaleString("en-US") + " points";
         const ava = $("#endAva");
         ava.style.background = m.you.color || "var(--paper)";
+        setAvatar(ava, (C.me && C.me.animal) || (C.my && C.my.animal));
         ava.innerHTML = '<img src="svg/' + ((C.me && C.me.animal) || C.my.animal) + '.svg" alt="" draggable="false">';
       }
       const list = $("#endList");
@@ -8250,6 +8579,7 @@ function onServer(m) {
         const mini = el("div", "mini");
         const pav = el("span", "pav");
         pav.style.background = p.color || "var(--paper)";
+        setAvatar(pav, p.animal);
         pav.innerHTML = '<img src="svg/' + p.animal + '.svg" alt="" draggable="false">';
         mini.appendChild(pav);
         mini.appendChild(el("span", "", p.name + " · " + p.score.toLocaleString("en-US")));
@@ -8405,14 +8735,30 @@ $("#btnJoin").addEventListener("click", joinNow);
 $("#cjRoomInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") joinNow();
 });
-document.querySelectorAll(".cdot").forEach((d) =>
-  d.addEventListener("click", () => {
-    if (!C.my || !COLORS.includes(d.dataset.color)) return;
-    C.my.color = d.dataset.color;
-    renderIdentity();
-    saveIdentity();
-  }),
-);
+/* colour dots: built once per container, clicks via delegation */
+function ensureColorDots() {
+  document.querySelectorAll(".cdots").forEach((box) => {
+    if (box.dataset.built) return;
+    box.dataset.built = "1";
+    COLORS.forEach((c) => {
+      const d = el("button", "cdot");
+      d.type = "button";
+      d.dataset.color = c;
+      d.style.background = c;
+      d.title = "Avatar colour";
+      box.appendChild(d);
+    });
+    box.addEventListener("click", (e) => {
+      const d = e.target.closest(".cdot");
+      if (!d || !C.my || !COLORS.includes(d.dataset.color)) return;
+      C.my.color = d.dataset.color;
+      renderIdentity();
+      saveIdentity();
+      SFX.select();
+    });
+  });
+}
+ensureColorDots();
 $("#endBtn").addEventListener("click", () => {
   stopRetry();
   try {
