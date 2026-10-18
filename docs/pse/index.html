@@ -2403,7 +2403,7 @@ const Lewis = (function () {
     p.parts.forEach((part) => {
       for (let i = 0; i < part.count; i++) atoms.push({ id: atoms.length, element: part.sym });
     });
-    if (atoms.length > 40) return fail("Maximal 40 Atome werden unterstützt.");
+    if (atoms.length > 200) return fail("Maximal 200 Atome werden unterstützt.");
     let total = 0;
     atoms.forEach((a) => {
       total += veOf(a.element);
