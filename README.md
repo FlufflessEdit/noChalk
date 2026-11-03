@@ -6,6 +6,8 @@ Hosted for free via github and the .ch was just the cheapest domain.
 You save everything locally on your device.
 If you want to run it locally, download the html file here
 
+Works best with the Chrome Webbrowser!
+
 -----------------------------------------------------------------------------------------
 Patch-Notes
 there is currently a bug preventing loading from the loading button on the start screen.
