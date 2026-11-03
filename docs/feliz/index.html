@@ -4291,12 +4291,13 @@ html {
     <input type="file" id="fileInput" hidden accept=".csv,.tsv,.txt,.xlsx,.xls,.ods,.json" />
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/peerjs@1/dist/peerjs.min.js" defer></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
     
 <!-- BEGIN js/core.js -->
 <script  defer>
 "use strict";
-console.info("[Feliz] v2.13 · slim lobby + input questions with accepted spellings");
+console.info("[Feliz] v2.14 · login fix: verified TURN relay + iOS 26 handling");
 
 /* =============== helpers =============== */
 const $ = (s) => document.querySelector(s);
@@ -4413,7 +4414,39 @@ const FX = (() => {
     },
   };
 })();
-
+/* =============== PeerJS network configuration =============== */
+/* v2.14 – measured on 2026-11-04 (see README-LOGIN-FIX.md):
+   • the old openrelay.metered.ca entries were DEAD weight: the name
+     now resolves to 192.0.2.1 (a reserved blackhole address) and never
+     answers – every join silently waited for their timeouts.
+   • both STUN servers below are verified reachable and answering.
+   • the TURN entries are Metered's documented global relay: the server
+     is alive and completed the full authentication handshake from our
+     test vantage point, but refused the allocation there (likely a
+     datacentre-IP policy). Open turn-check.html (included in the fix)
+     on the classroom Wi-Fi to see whether it relays for you – if not,
+     sign up for your own free Open Relay key (2 minutes, 20 GB/month;
+     a whole quiz needs a few KB) and replace username/credential:
+     https://www.metered.ca/tools/openrelay/                             */
+const FELIZ_ICE = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "turn:global.relay.metered.ca:80", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
+  { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
+  { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
+  { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" }, /* most firewall-friendly: TLS on 443 */
+];
+const PEER_OPTS = {
+  debug: 0,
+  config: { iceServers: FELIZ_ICE, iceCandidatePoolSize: 4 },
+  /* own broker instead of the public cloud – fixes the iOS 26 Safari
+     WebSocket-over-HTTP/2 bug for good (recipe in README-LOGIN-FIX.md):
+       host: "p.nochalk.ch", port: 443, path: "/", secure: true,
+     CRITICAL: that vhost must NOT offer HTTP/2 or HTTP/3 (no "http2 on",
+     no QUIC listener), and if nochalk.ch runs behind Cloudflare the
+     broker subdomain must be grey-clouded ("DNS only") – otherwise
+     Safari on iOS 26 fails the WebSocket handshake all over again.   */
+};
 /* =============== names & avatars =============== */
 const ADJ = [
   "Swift",
@@ -6141,6 +6174,19 @@ async function handleFile(file) {
 <!-- BEGIN js/host.js -->
 <script  defer>
 "use strict";
+/* v2.14 · host side of the login/reconnect fix – pair with core.js v2.14
+   and client.js v2.14. Changes:
+   • onJoin(): a returning player takes over their old entry even if the
+     old connection never closed (ghost) – no more duplicate players,
+     score and name are kept
+   • conn "close" ignores superseded connections (p.conn !== conn)
+   • setupPeer() assigns G.peer immediately – healing used to dead-end
+     when the broker was down at room start (nothing ever retried)
+   • replacePeer() no longer destroy()s the peer while live players are
+     connected – destroy() closes ALL data connections (peerjs source);
+     the old peer is only retired, its socket cut, players keep playing
+   • join URL: no more "//" or "index.html/" in the QR target
+   • healPeer() replaces a peer that never opened or is already gone   */
 
 /* =============== host game state =============== */
 const G = {
@@ -6278,6 +6324,17 @@ function joinBase() {
 function joinHostText() {
   return joinBase().replace(/^https?:\/\//, "");
 }
+/* v2.14: joinBase() + "/#join=" produced "//" (or "index.html/") in the
+   QR target – normalize to exactly one slash before the hash          */
+function buildJoinURL(code) {
+  return (
+    joinBase()
+      .replace(/index\.html?$/i, "")
+      .replace(/\/?$/, "/") +
+    "#join=" +
+    code
+  );
+}
 function updateJoinTexts() {
   $("#joinUrl").textContent = joinHostText();
   $("#joinCode").textContent = G.code;
@@ -6296,13 +6353,13 @@ function enterLobby() {
   seq = 0;
   G.code = makeCode();
   show("scr-lobby");
-  const base = location.href.split("#")[0];
-  G.joinURL = joinBase() + "/#join=" + G.code;
+  G.joinURL = buildJoinURL(G.code);
   updateJoinTexts();
   drawQR(G.joinURL);
   updateJoinHint();
   renderLobby();
-  setupPeer(0);
+  destroyAllPeers(); /* v2.14: includes retired peers from the previous round */
+  setupPeer();
 }
 function drawQR(text) {
   const cvs = $("#qrCanvas");
@@ -6322,34 +6379,156 @@ function drawQR(text) {
     toast("The QR code could not be generated – copy the link instead.", "err");
   }
 }
-function setupPeer(retry) {
+/* =============== peer server connection (self-healing) =============== */
+/* The broker socket can drop silently after a few minutes (school
+   NAT kills idle connections). PeerJS fires "disconnected" – NOT an
+   error. Without a reconnect the room id vanishes from the broker:
+   players already in keep playing (their connections are direct),
+   but every NEW joiner gets "room not found" – code is correct.
+   Verified against the peerjs 1.5.5 source:
+   – the socket has NO auto-reconnect; reconnect() must be called
+   – PeerServer frees the room id the moment the socket dies, and
+     offers expire after 5 s → a short healing window is enough
+   – peer.destroy() closes ALL data connections (this used to kick
+   every player out whenever the room re-registered)                */
+let peerGen = 0; /* generation counter – stale events of replaced peers are ignored */
+let peerWanted = false; /* false = room closed on purpose (exit) */
+let peerFails = 0; /* consecutive failed registrations – reset on success */
+let healTries = 0; /* healings without a successful re-registration in between */
+let healTO = null; /* debounce: one healing action at a time */
+let retiredPeers = []; /* v2.14: replaced peers that still carry live player connections */
+
+function setupPeer() {
   if (typeof Peer === "undefined") {
     toast("Connection service offline – students cannot join via QR. Demo players still work.", "err");
     return;
   }
-  const p = new Peer(G.code, { debug: 0 });
-  let opened = false;
+  peerWanted = true;
+  const gen = ++peerGen;
+  const p = new Peer(G.code, PEER_OPTS);
+  /* v2.14: assign right away – healPeer() must be able to act even
+     when the registration never completes (broker down at start)    */
+  G.peer = p;
+
   p.on("open", () => {
-    opened = true;
-    G.peer = p;
-    p.on("connection", (conn) => handleConn(conn));
+    if (gen !== peerGen) return;
+    healTries = 0;
+    if (peerFails > 0) toast("Room is reachable again – new joins work.", "ok");
+    peerFails = 0;
   });
+
+  /* players connect (late joins, reconnects) – attached exactly once */
+  p.on("connection", (conn) => {
+    if (gen === peerGen) handleConn(conn);
+  });
+
+  /* silent broker drop – the #1 cause of "room not found" for later joiners */
+  p.on("disconnected", () => {
+    if (gen !== peerGen || !peerWanted) return;
+    toast("Connection hiccup – re-establishing the room …");
+    healPeer();
+  });
+
   p.on("error", (err) => {
-    if (!opened && err && err.type === "unavailable-id" && retry < 3) {
-      try {
-        p.destroy();
-      } catch (_) {}
-      G.code = makeCode();
-      G.joinURL = joinBase() + "/#join=" + G.code;
-      updateJoinTexts();
-      drawQR(G.joinURL);
-      setupPeer(retry + 1);
+    if (gen !== peerGen || !peerWanted) return;
+    const type = err && err.type;
+    if (type === "unavailable-id") {
+      /* code taken by a ghost registration – roll a new code (QR updates) */
+      replacePeer(makeCode());
+    } else if (type === "peer-unavailable") {
+      /* a client vanished mid-handshake – irrelevant for the room */
+    } else if (
+      ["network", "server-error", "server-disconnected", "socket-error", "socket-disconnected", "ssl-unavailable", "socket-closed"].includes(type)
+    ) {
+      healPeer();
+    }
+    /* everything else concerns single connections – ignore */
+  });
+}
+
+/* gentle first: reconnect with the same code; fresh registration only if that fails */
+function healPeer() {
+  if (healTO || !peerWanted) return;
+  healTO = setTimeout(() => {
+    healTO = null;
+    if (!peerWanted) return;
+    const p = G.peer;
+    if (!p) {
+      /* v2.14: the peer never even registered (broker down when the
+         room was created). Healing used to dead-end here – nothing
+         retried until the page was reloaded.                        */
+      replacePeer();
       return;
     }
-    if (err && ["network", "server-error", "socket-error", "socket-disconnected"].includes(err.type)) {
-      toast("Connection service temporarily unavailable – QR joining is not possible right now.", "err");
+    healTries++;
+    if (p.disconnected && !p.destroyed && healTries <= 3) {
+      try {
+        p.reconnect(); /* same room code, keeps all player connections */
+        return;
+      } catch (e) {}
     }
+    replacePeer();
+  }, 900);
+}
+
+/* tear the peer down and re-register – with a new code if one is passed.
+   v2.14: while live players are connected the old peer is only RETIRED:
+   its signalling socket is cut (freeing the room id on the broker), but
+   the direct player connections keep working. destroy() would close
+   them all and kick everyone out mid-game.                            */
+function replacePeer(newCode) {
+  const p = G.peer;
+  if (p) {
+    if (G.players.some((x) => x.alive && !x.bot)) {
+      try {
+        p.disconnect(); /* keeps the data connections */
+      } catch (e) {}
+      retiredPeers.push(p);
+    } else {
+      try {
+        p.destroy();
+      } catch (e) {}
+    }
+    G.peer = null;
+  }
+  if (newCode) {
+    G.code = newCode;
+    G.joinURL = buildJoinURL(G.code);
+    drawQR(G.joinURL);
+    $("#joinUrl").textContent = joinHostText();
+    $("#joinCode").textContent = G.code;
+    updateJoinHint();
+  }
+  peerFails++;
+  if (peerFails === 4) toast("The connection service is hard to reach – retrying in the background …", "err");
+  setTimeout(
+    () => {
+      if (peerWanted) setupPeer();
+    },
+    Math.min(15000, 1500 * peerFails),
+  );
+}
+
+/* v2.14: destroy the current peer AND all retired ones */
+function destroyAllPeers() {
+  retiredPeers.forEach((rp) => {
+    try {
+      rp.destroy();
+    } catch (e) {}
   });
+  retiredPeers = [];
+  if (G.peer) {
+    try {
+      G.peer.destroy();
+    } catch (e) {}
+    G.peer = null;
+  }
+}
+
+/* intentional shutdown (exit button) – stops all auto-healing */
+function closePeer() {
+  peerWanted = false;
+  destroyAllPeers();
 }
 function handleConn(conn) {
   conn.on("data", (m) => {
@@ -6391,7 +6570,10 @@ function handleConn(conn) {
   });
   conn.on("close", () => {
     const p = conn.playerRef;
-    if (!p) return;
+    /* v2.14: ignore connections that were superseded by a newer one
+       (identity takeover) – closing the old one must not kill the
+       revived player                                              */
+    if (!p || p.conn !== conn) return;
     p.alive = false;
     if (!G.started) {
       G.players = G.players.filter((x) => x !== p);
@@ -6404,10 +6586,18 @@ function onJoin(conn, m) {
   const want = String(m.name || "")
     .trim()
     .slice(0, 26);
-  /* reconnect: revive a disconnected player with the same name – score is kept */
-  const old = want ? G.players.find((p) => !p.alive && !p.bot && p.name === want) : null;
+  /* reconnect: revive the player with this name – score is kept.
+     v2.14: the old connection is taken over even if it never noticed
+     it died (ghost). Without this, a returning player appeared twice:
+     once as a "dead" entry and once under a random new name.       */
+  const old = want ? G.players.find((p) => !p.bot && p.name === want) : null;
   let p;
   if (old) {
+    if (old.conn && old.conn !== conn) {
+      try {
+        old.conn.close(); /* fires the guarded close handler above */
+      } catch (e) {}
+    }
     p = old;
     p.conn = conn;
     p.alive = true;
@@ -8224,7 +8414,17 @@ function pvQEl(q, idx) {
 "use strict";
 
 /* =============== client (player device) =============== */
-const C = { room: "", my: null, me: null, peer: null, conn: null, qi: -1, qT0: 0, answered: false, finished: false, retryTO: null, noRetry: false };
+/* v2.14 – login fix for iPhone 17 / newer devices:
+   • serialization "json" – Safari drops binary-packed messages
+     (peers/peerjs #587, #599); the host adapts automatically
+   • detects the iOS 26 Safari WebSocket-over-HTTP/2 bug (the public
+     broker 0.peerjs.com negotiates h2) and shows a working workaround
+     instead of a greyed-out button
+   • a signalling socket that dies silently fails fast after two drops
+     (PeerJS used to retry it internally forever – "nothing happens")
+   • "busy" hands the Join button back; the mid-game reconnect stops
+     after 8 rounds and returns to the join screen with a message     */
+const C = { room: "", my: null, me: null, peer: null, conn: null, qi: -1, qT0: 0, answered: false, finished: false, retryTO: null, noRetry: false, recTries: 0 };
 
 function showC(id) {
   document.querySelectorAll("#client .cscr").forEach((s) => s.classList.toggle("on", s.id === id));
@@ -8357,67 +8557,149 @@ function stopRetry() {
     C.retryTO = null;
   }
 }
+/* ---- connection with timeout, error handling and retries ----
+   One failed attempt used to end in "room not found" or a greyed
+   button. The public broker is flaky under load (a whole class hits
+   it from one school IP) – a fresh retry fixes most cases.        */
+const JOIN_TRIES = 3;
 function connectClient() {
   if (C.peer) return;
-  const st = $("#cjStatus"),
-    btn = $("#btnJoin");
-  st.textContent = "Connecting to room " + C.room + " …";
-  btn.disabled = true;
+  stopRetry();
+  C.retryCount = 0;
+  $("#btnJoin").disabled = true;
+  attemptJoin(1);
+}
+
+/* iOS 26 Safari cannot open the signalling WebSocket when the broker
+   speaks HTTP/2 – and the public broker 0.peerjs.com does exactly that
+   (verified via ALPN). Safari freezes the OS version in its user agent,
+   only the Version/26 token reveals it. Third-party iOS browsers
+   (CriOS, FxiOS …) use their own networking stack and are fine.     */
+function isIOS26Safari() {
+  const ua = navigator.userAgent;
+  return /Version\/26\.\d+/.test(ua) && /Mobile\/15E148 Safari\//.test(ua) && !/(CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo)/.test(ua);
+}
+const IOS26_HINT =
+  "This iPhone (iOS 26 + Safari) hits a known connection bug. Open this page in Firefox or Chrome on this phone – or switch off Settings › [your name] › iCloud › Private Relay, reload and try again.";
+
+function attemptJoin(n) {
+  const st = $("#cjStatus");
+  st.textContent = "Connecting to room " + C.room + " …" + (n > 1 ? " (try " + n + "/" + JOIN_TRIES + ")" : "");
   const P = window.Peer;
   if (!P) {
     st.textContent = "Connection service unavailable (offline?).";
-    btn.disabled = false;
+    $("#btnJoin").disabled = false;
     return;
   }
-  C.peer = new P();
-  let connected = false;
-  /* no silent hang: if nothing happens, the button comes back */
-  const giveUp = setTimeout(() => {
-    if (connected || C.finished) return;
-    st.textContent = "Could not reach the room. Check the code and try again.";
-    btn.disabled = false;
-    if (C.peer) {
-      try {
-        C.peer.destroy();
-      } catch (_) {}
+  let settled = false,
+    opened = false,
+    conn = null,
+    giveUp = 0;
+  const peer = new P(PEER_OPTS);
+  C.peer = peer;
+
+  const fail = (msg, again) => {
+    if (settled || C.finished) return;
+    settled = true;
+    clearTimeout(giveUp);
+    try {
+      peer.destroy();
+    } catch (e) {}
+    if (C.peer === peer) C.peer = null;
+    if (again && n < JOIN_TRIES)
+      setTimeout(() => {
+        if (!C.finished && !C.peer) attemptJoin(n + 1);
+      }, 1200);
+    else {
+      st.textContent = msg;
+      $("#btnJoin").disabled = false;
     }
-    C.peer = null;
-    C.conn = null;
-  }, 15000);
-  C.peer.on("open", () => {
-    const conn = C.peer.connect(C.room, { reliable: true });
-    C.conn = conn;
+  };
+  giveUp = setTimeout(() => {
+    /* nothing happened at all: on iOS 26 Safari that is the known
+       WebSocket-over-HTTP/2 bug – retrying cannot fix it            */
+    const ios26 = !opened && isIOS26Safari();
+    fail(ios26 ? IOS26_HINT : "Could not reach the room. Check the code and the Wi-Fi, then try again.", !ios26);
+  }, 12000);
+
+  peer.on("open", () => {
+    if (settled) return;
+    opened = true;
+    /* "json" instead of binary packing: Safari on iOS drops or mangles
+       BinaryPack messages (peers/peerjs #587, #599) – every Feliz
+       message is plain JSON anyway. The host side adapts to this
+       automatically, host.js needs no change.                        */
+    conn = peer.connect(C.room, { reliable: true, serialization: "json" });
     conn.on("open", () => {
-      connected = true;
+      if (settled) return;
+      settled = true;
       clearTimeout(giveUp);
+      C.conn = conn;
       conn.send({ t: "join", name: C.my.name, animal: C.my.animal, color: C.my.color });
       st.textContent = "Joining …";
     });
     conn.on("data", (d) => onServer(d));
+    conn.on("error", () => {
+      if (C.conn === conn) lostConnection(); /* mid-session */
+      else fail("Connection error – retrying …", true);
+    });
     conn.on("close", () => {
-      if (C.finished) return;
-      showC("c-wait");
-      $("#cwStatus").textContent = "Connection lost – reconnecting …";
-      scheduleReconnect();
+      if (C.conn === conn) lostConnection(); /* only a real loss, not a failed attempt */
     });
   });
-  C.peer.on("error", (e) => {
-    clearTimeout(giveUp);
-    st.textContent = e.type === "peer-unavailable" ? "Room not found – is the host window still open?" : "Connection error (" + e.type + ").";
-    btn.disabled = false;
-    if (C.peer) {
-      try {
-        C.peer.destroy();
-      } catch (_) {}
-    }
-    C.peer = null;
+
+  /* the signalling socket died before the peer ever opened – PeerJS
+     has NO auto-reconnect (verified against the 1.5.5 source), and on
+     iOS 26 Safari the WebSocket handshake itself fails against
+     HTTP/2 brokers. One drop before "open" is enough to know.     */
+  peer.on("disconnected", () => {
+    if (opened || settled) return;
+    const ios26 = isIOS26Safari();
+    fail(ios26 ? IOS26_HINT : "The room service dropped the connection – retrying …", !ios26);
+  });
+
+  peer.on("error", (e) => {
+    const type = e && e.type;
+    if (type === "peer-unavailable")
+      /* often wrong – the broker loses rooms under load: retry first */
+      fail("Room not found – is the host window still open?", true);
+    else if (["network", "socket-error", "socket-disconnected", "server-error", "server-disconnected", "ssl-unavailable"].includes(type)) {
+      /* "network" is what PeerJS fires when the broker WebSocket dies –
+         on iOS 26 Safari that is the HTTP/2 bug: retrying cannot help */
+      const ios26 = !opened && isIOS26Safari();
+      fail(ios26 ? IOS26_HINT : "Connection error (" + type + ") – retrying …", !ios26);
+    } else fail("Connection error (" + type + ").", false);
   });
 }
 
+/* a live connection broke mid-game → wait screen + auto reconnect */
+function lostConnection() {
+  if (C.finished) return;
+  C.conn = null;
+  showC("c-wait");
+  $("#cwStatus").textContent = "Connection lost – reconnecting …";
+  scheduleReconnect();
+}
+
 /* automatic reconnection with the same identity (the host revives the
-   player – including their score)                                       */
+   player – including their score). Stops after REC_TRIES rounds and
+   hands the Join button back instead of spinning forever.            */
+const REC_TRIES = 8;
 function scheduleReconnect() {
   if (C.finished || C.noRetry || C.retryTO) return;
+  C.recTries = (C.recTries || 0) + 1;
+  if (C.recTries > REC_TRIES) {
+    C.recTries = 0;
+    C.conn = null;
+    try {
+      if (C.peer) C.peer.destroy();
+    } catch (_) {}
+    C.peer = null;
+    $("#btnJoin").disabled = false;
+    $("#cjStatus").textContent = "The room is gone – the host window is probably closed. Press Join once it is open again.";
+    showC("c-join");
+    return;
+  }
   C.retryTO = setTimeout(() => {
     C.retryTO = null;
     if (C.finished || C.noRetry) return;
@@ -8430,9 +8712,23 @@ function scheduleReconnect() {
     C.conn = null;
     const P = window.Peer;
     if (!P) return;
-    C.peer = new P();
+    let opened = false,
+      giveUp = 0;
+    /* the room may still be re-registering on the host side – but if
+       the socket never opens within 10 s, try a fresh round          */
+    giveUp = setTimeout(() => {
+      if (opened) return;
+      try {
+        C.peer && C.peer.destroy();
+      } catch (_) {}
+      C.peer = null;
+      scheduleReconnect();
+    }, 10000);
+    C.peer = new P(PEER_OPTS);
     C.peer.on("open", () => {
-      const conn = C.peer.connect(C.room, { reliable: true });
+      opened = true;
+      clearTimeout(giveUp);
+      const conn = C.peer.connect(C.room, { reliable: true, serialization: "json" });
       C.conn = conn;
       conn.on("open", () => {
         /* use the name the server assigned – it may differ from the chosen one */
@@ -8446,8 +8742,13 @@ function scheduleReconnect() {
         scheduleReconnect();
       });
     });
-    C.peer.on("error", (e) => {
-      if (e && e.type === "peer-unavailable") return; /* room gone – no point retrying */
+    C.peer.on("error", () => {
+      if (opened) return; /* mid-session losses arrive via conn "close" */
+      clearTimeout(giveUp);
+      try {
+        C.peer && C.peer.destroy();
+      } catch (_) {}
+      C.peer = null;
       scheduleReconnect();
     });
   }, 4000);
@@ -8517,7 +8818,9 @@ function onServer(m) {
   if (!m || typeof m !== "object") return;
   switch (m.t) {
     case "welcome": {
+      C.retryCount = 0;
       stopRetry();
+      C.recTries = 0;
       C.me = m;
       if (COLORS.includes(m.color)) {
         C.my.color = m.color;
@@ -8697,12 +9000,13 @@ function onServer(m) {
     case "busy":
       C.noRetry = true; /* this round can't be joined – stop retrying */
       stopRetry();
-      $("#cjStatus").textContent = "This round is already running – wait for the next one.";
-      if (C.conn) {
-        try {
-          C.conn.close();
-        } catch (_) {}
-      }
+      C.conn = null;
+      try {
+        if (C.peer) C.peer.destroy();
+      } catch (_) {}
+      C.peer = null;
+      $("#btnJoin").disabled = false; /* let them try again next round */
+      $("#cjStatus").textContent = "This round is already running – wait for the next one, then press Join again.";
       break;
   }
 }
@@ -8878,6 +9182,7 @@ $("#endBtn").addEventListener("click", () => {
   C.noRetry = false;
   C.me = null;
   C.waage = null;
+  C.recTries = 0;
   $("#btnJoin").disabled = false;
   $("#cjStatus").textContent = "";
   renderIdentity();
@@ -8891,7 +9196,17 @@ $("#endBtn").addEventListener("click", () => {
 <!-- BEGIN js/main.js -->
 <script  defer>
 "use strict";
-
+/* CDN fallback – school filters sometimes block jsdelivr */
+if (!window.Peer) {
+  const s = document.createElement("script");
+  s.src = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
+  document.head.appendChild(s);
+}
+if (!window.XLSX) {
+  const s = document.createElement("script");
+  s.src = "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js";
+  document.head.appendChild(s);
+}
 /* =============== global controls (Drag&Drop-FIXES eingebaut) =============== */
 const dropzone = $("#dropzone");
 const fileInput = $("#fileInput");
@@ -9022,10 +9337,7 @@ $("#btnExit").addEventListener("click", () => {
     return;
   }
   if (!G.started) {
-    try {
-      if (G.peer) G.peer.destroy();
-    } catch (_) {}
-    G.peer = null;
+    closePeer();
     G.quiz = null;
     G.players = [];
     show("scr-upload");
