@@ -10,5 +10,4 @@ Works best with the Chrome Webbrowser!
 
 -----------------------------------------------------------------------------------------
 Patch-Notes
-there is currently a bug preventing loading from the loading button on the start screen.
-Workaround: Create a new file and then click on loading. Then it does load correctly. 
+2.1.6 fixed a bug, preventing the load button from the start window to work correctly on firefox.
