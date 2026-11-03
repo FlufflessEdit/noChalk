@@ -10,5 +10,5 @@ Works best with the Chrome Webbrowser!
 
 -----------------------------------------------------------------------------------------
 Patch-Notes
-
+2.1.7 tweaked the touch navigation on big boards.
 2.1.6 fixed a bug, preventing the load button from the start window to work correctly on firefox.
