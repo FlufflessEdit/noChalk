@@ -7743,12 +7743,21 @@ $("#podBtn").addEventListener("click", () => {
    above onto the liquid surface. The first glass to overflow
    wins.                                                 */
 
-/* v2.18: TILT DIRECTION fixed – with this app's beam CSS the sign
-   was the wrong way round: the side with MORE correct answers
-   (heavier, fuller glass) visibly ROSE instead of sinking. The
-   tilt target and the little kick when a drop lands are flipped,
-   so the heavier side now hangs deeper, like a real balance
-   scale. The win logic (first glass to overflow) is untouched. */
+/* v2.19: TILT DIRECTION is now ONE switch you can set yourself:
+   WAAGE.tiltSign, a few lines below (in the WAAGE = { … } line).
+     +1  = as delivered (v2.18 behaviour)
+     -1  = inverted – set this if on your screen the side with MORE
+           correct answers still rises instead of sinking
+   The switch drives BOTH the resting tilt AND the little kick when
+   a drop lands. Why a switch at all? The visual direction depends
+   on how your CSS rotates the beam (.wbeam) and offsets the hangers
+   (.whang.hL / .whang.hR) – that part is invisible to the JS, so
+   instead of guessing the sign a third time, you can now simply
+   turn it. If -1 is what works for you, the actual sign bug lives
+   in your CSS – you may fix it there instead (optional).
+   v2.18 flipped the hard-wired sign once (heavier side sinks);
+   v2.19 keeps that as the default and makes it adjustable.
+   The win logic (first glass to overflow) is untouched. */
 
 /* v2.16 (UI-fix package): the maximum fill height is
    configurable. The setup dialog gets a number field
@@ -7762,8 +7771,13 @@ $("#podBtn").addEventListener("click", () => {
    see the round end after barely a minute. The team counters
    now show exact logic units (incl. head start) "x / cap". */
 
-const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100 };
-console.info("[Feliz] waage.js v2.18 · tilt fix: the heavier side sinks");
+const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100, tiltSign: 1 };
+/*          ▲▲▲ HIER die Neigungsrichtung einstellen ▲▲▲
+   tiltSign:  1 = Standard: die Seite mit MEHR richtigen Antworten
+                  (volleres Glas) sinkt tiefer
+              -1 = umgekehrt – setze -1, wenn bei dir die falsche
+                  Seite sinkt. Wirkt sofort nach dem Neuladen.   */
+console.info("[Feliz] waage.js v2.19 · tilt direction switch: WAAGE.tiltSign = 1 | -1");
 const WPHYS = { tilt: 0, vel: 0, target: 0, raf: 0, root: null, lastT: 0 };
 const W_BASE = 7; /* px – every player exists as a base layer */
 
@@ -7939,13 +7953,13 @@ function waageWinner() {
   if (oa >= 0 && ob >= 0) return oa >= ob ? 0 : 1;
   return oa >= 0 ? 0 : 1;
 }
-/* v2.18: sign flipped – the old formula lifted the fuller side in
-   this app's CSS. New convention, matched to what the beam really
-   renders: team 0 = left/red, team 1 = right/blue; the team with
-   more units (heavier glass) gets the tilt that sinks ITS side. */
+/* v2.19: direction follows WAAGE.tiltSign (see the big arrow at
+   the top of this file). Convention at tiltSign = +1: team 0 =
+   left/red, team 1 = right/blue; the team with more units
+   (heavier glass) gets the tilt that sinks ITS side.          */
 function computeTiltTarget() {
   const d = (teamFillPxVis(0) - teamFillPxVis(1)) / Math.max(1, WAAGE.rim);
-  return Math.max(-15, Math.min(15, d * 30));
+  return (WAAGE.tiltSign || 1) * Math.max(-15, Math.min(15, d * 30));
 }
 
 /* ---- game start: questions go to the devices ---- */
@@ -8021,7 +8035,7 @@ function waageAddUnit(p) {
     updateScales();
     splash(root, p);
     WPHYS.target = computeTiltTarget();
-    WPHYS.vel += (p.team === 0 ? 1 : -1) * 11; /* v2.18: kick toward the side that just scored */
+    WPHYS.vel += (WAAGE.tiltSign || 1) * (p.team === 0 ? 1 : -1) * 11; /* v2.19: kick toward the scoring side, obeys WAAGE.tiltSign */
     if (waageOver()) setTimeout(waageVictory, 1100);
   });
 }
