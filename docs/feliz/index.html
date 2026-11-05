@@ -4297,7 +4297,10 @@ html {
 <!-- BEGIN js/core.js -->
 <script  defer>
 "use strict";
-console.info("[Feliz] core.js v2.17 · rich text + MC-style answer reveal + podium order + version badge");
+/* v2.18 – package version sync: the fix lives in waage.js (balance
+   tilt – the heavier side now sinks). No changes in this file; the
+   bump keeps badge, console lines and ?v= cache tags uniform. */
+console.info("[Feliz] core.js v2.18 · version sync – code as v2.17 (fix in waage.js)");
 
 /* =============== helpers =============== */
 const $ = (s) => document.querySelector(s);
@@ -6388,7 +6391,10 @@ async function handleFile(file) {
 <!-- BEGIN js/host.js -->
 <script  defer>
 "use strict";
-/* v2.17 · reworks the two screens you reported after the first rollout:
+/* v2.18 – package version sync: the fix lives in waage.js (balance
+   tilt – the heavier side now sinks). No changes in this file; the
+   bump keeps badge, console lines and ?v= cache tags uniform.
+   v2.17 · reworks the two screens you reported after the first rollout:
    • TEXT QUESTIONS: show ONLY the correct answer card, with the count
      of correct answers as a small badge in its TOP RIGHT corner –
      the exact same .cnt badge the multiple-choice answers use. The
@@ -6396,7 +6402,7 @@ async function handleFile(file) {
    • PODIUM: order is now Podium → reload note + button → THEN the
      remaining players list (capped to the space left below, "… plus
      N more"). Podium and button are always visible, on any screen.
-   • ON-SCREEN VERSION BADGE (bottom left, "Feliz v2.17"): instantly
+   • ON-SCREEN VERSION BADGE (bottom left, "Feliz v2.18"): instantly
      shows WHICH code the browser is actually running. If it is not
      visible after a reload, the browser is still serving an old
      cached file – hard refresh (Ctrl+F5) and check the upload.
@@ -6416,11 +6422,11 @@ if (typeof setRich !== "function" || typeof plainText !== "function") {
   };
   console.warn("[Feliz] core.js older than host.js – formatting inactive, hard-refresh (Ctrl+F5)");
 }
-console.info("[Feliz] host.js v2.17");
+console.info("[Feliz] host.js v2.18");
 /* v2.17: visible version badge so "old code still served" is provable */
 if (document.body) {
   const badge = document.createElement("div");
-  badge.textContent = "Feliz v2.17";
+  badge.textContent = "Feliz v2.18";
   badge.title = "Zeigt die tatsächlich laufende Version. Fehlt dieses Eckchen nach einem Neuladen, dient der Browser noch eine alte Datei aus dem Cache: hart nachladen (Strg+F5).";
   badge.style.cssText =
     "position:fixed;left:8px;bottom:8px;z-index:99999;opacity:.45;font:11px/1.5 monospace;pointer-events:none";
@@ -7737,6 +7743,13 @@ $("#podBtn").addEventListener("click", () => {
    above onto the liquid surface. The first glass to overflow
    wins.                                                 */
 
+/* v2.18: TILT DIRECTION fixed – with this app's beam CSS the sign
+   was the wrong way round: the side with MORE correct answers
+   (heavier, fuller glass) visibly ROSE instead of sinking. The
+   tilt target and the little kick when a drop lands are flipped,
+   so the heavier side now hangs deeper, like a real balance
+   scale. The win logic (first glass to overflow) is untouched. */
+
 /* v2.16 (UI-fix package): the maximum fill height is
    configurable. The setup dialog gets a number field
    "Units until full" (5–500, injected by script – no HTML
@@ -7750,6 +7763,7 @@ $("#podBtn").addEventListener("click", () => {
    now show exact logic units (incl. head start) "x / cap". */
 
 const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100 };
+console.info("[Feliz] waage.js v2.18 · tilt fix: the heavier side sinks");
 const WPHYS = { tilt: 0, vel: 0, target: 0, raf: 0, root: null, lastT: 0 };
 const W_BASE = 7; /* px – every player exists as a base layer */
 
@@ -7925,10 +7939,12 @@ function waageWinner() {
   if (oa >= 0 && ob >= 0) return oa >= ob ? 0 : 1;
   return oa >= 0 ? 0 : 1;
 }
-/* positive tilt = clockwise = right side (team 1) hangs lower:
-   the fuller / heavier side sinks                             */
+/* v2.18: sign flipped – the old formula lifted the fuller side in
+   this app's CSS. New convention, matched to what the beam really
+   renders: team 0 = left/red, team 1 = right/blue; the team with
+   more units (heavier glass) gets the tilt that sinks ITS side. */
 function computeTiltTarget() {
-  const d = (teamFillPxVis(1) - teamFillPxVis(0)) / Math.max(1, WAAGE.rim);
+  const d = (teamFillPxVis(0) - teamFillPxVis(1)) / Math.max(1, WAAGE.rim);
   return Math.max(-15, Math.min(15, d * 30));
 }
 
@@ -8005,7 +8021,7 @@ function waageAddUnit(p) {
     updateScales();
     splash(root, p);
     WPHYS.target = computeTiltTarget();
-    WPHYS.vel += (p.team === 0 ? -1 : 1) * 11;
+    WPHYS.vel += (p.team === 0 ? 1 : -1) * 11; /* v2.18: kick toward the side that just scored */
     if (waageOver()) setTimeout(waageVictory, 1100);
   });
 }
@@ -8910,7 +8926,11 @@ function pvQEl(q, idx) {
 "use strict";
 
 /* =============== client (player device) =============== */
-/* v2.17 – on top of v2.16:
+/* v2.18 – package version sync: the fix lives in waage.js (balance
+   tilt – the heavier side now sinks), which runs on the host screen
+   only. No changes in this file; the bump keeps the ?v= cache tags
+   of the whole package uniform.
+   v2.17 – on top of v2.16:
    • falls back to plain text instead of crashing if core.js is still
      an older version on some device (tags would show literally, but
      joining and playing keep working)
@@ -8946,7 +8966,7 @@ if (typeof setRich !== "function" || typeof plainText !== "function") {
     if (n) n.textContent = s == null ? "" : String(s);
   };
 }
-console.info("[Feliz] client.js v2.17");
+console.info("[Feliz] client.js v2.18");
 const C = { room: "", my: null, me: null, peer: null, conn: null, qi: -1, qT0: 0, answered: false, finished: false, retryTO: null, noRetry: false, recTries: 0, hostNet: 0, lastRx: 0, hbInt: null, recRelay: false };
 
 function showC(id) {
