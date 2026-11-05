@@ -4297,7 +4297,7 @@ html {
 <!-- BEGIN js/core.js -->
 <script  defer>
 "use strict";
-console.info("[Feliz] v2.14 · login fix: verified TURN relay + iOS 26 handling");
+console.info("[Feliz] core.js v2.17 · rich text + MC-style answer reveal + podium order + version badge");
 
 /* =============== helpers =============== */
 const $ = (s) => document.querySelector(s);
@@ -4343,6 +4343,113 @@ function updateChrome() {
   document.body.classList.toggle("ingame", !isClient && id === "scr-game");
   $("#btnExit").hidden = isClient || !(id === "scr-lobby" || id === "scr-game");
 }
+
+/* [RICH-TEXT-BEGIN] =============== rich text (v2.16) ===============
+   Kahoot imports carry formatting as literal text – HTML tags like
+   <b>, <i>, <u>, <br> or markdown like **bold**, *italic*, _underline_.
+   Until now they showed up as raw text on the board and the phones.
+   richHTML() turns them into real formatting – SAFELY:
+   • the string is fully escaped first, then only a fixed whitelist of
+     tags WITHOUT any attributes is restored (<b> <i> <u> <s> <br> <p>
+     <li> <ul> <ol> <sub> <sup>) – nothing executable, no links, no
+     styles can be smuggled in with a quiz import
+   • every other known tag (div, span, a, img, script, table, …) is
+     removed completely while its inner text is kept
+   • markdown runs on the raw text with boundary rules that keep math
+     (2*3*4) and snake_case_words untouched
+   • the token walk pairs open/close tags: closers without a live
+     opener are dropped, <script>/<style> swallow their content, and
+     unclosed tags are auto-closed – so no tag ever leaks as text
+   setRich() renders it into a node, plainText() reduces it back to
+   plain text – used for answer matching, so a typed "Paris" matches
+   an accepted answer written as "<b>Paris</b>".                      */
+const RICH_KEEP = "b|strong|i|em|u|s|br|p|li|ul|ol|sub|sup";
+const RICH_DROP = "div|span|font|a|img|table|tbody|thead|tr|td|th|h[1-6]|blockquote|pre|code|hr|figure|figcaption|small|mark|script|style|iframe|object|embed|svg|video|audio|source";
+const RICH_KEEP_SET = new Set(["b", "i", "u", "s", "br", "p", "li", "ul", "ol", "sub", "sup"]);
+const RICH_OPEN = "^|[\\s(\\[{\"'„“‚‹«>–—-]";
+const RICH_CLOSE = "$|[\\s)\\]}\"'.,;:!?…<>„“‚›»–—-]";
+function richHTML(str) {
+  if (str == null) return "";
+  let s = String(str);
+  /* 1) decode the entities imports tend to carry (&lt;b&gt; acts like <b>).
+        nbsp comes AFTER the &amp; step – double-encoded exports carry
+        "&amp;nbsp;", and only then does the real "&nbsp;" exist.       */
+  s = s
+    .replace(/&lt;|&#60;/gi, "<")
+    .replace(/&gt;|&#62;/gi, ">")
+    .replace(/&quot;|&#34;/gi, '"')
+    .replace(/&apos;|&#39;/gi, "'")
+    .replace(/&amp;|&#38;/gi, "&")
+    .replace(/&nbsp;|&#160;/gi, " ");
+  /* 2) markdown on the raw text – markers that sit directly next to word
+        characters are never formatting, so 2*3*4 and file_name stay   */
+  s = s.replace(new RegExp("(" + RICH_OPEN + ")\\*\\*([^*\\s][^*\\n]*?)\\*\\*(?=" + RICH_CLOSE + ")", "g"), "$1<b>$2</b>");
+  s = s.replace(new RegExp("(" + RICH_OPEN + ")\\*([^*\\s][^*\\n]*?)\\*(?=" + RICH_CLOSE + ")", "g"), "$1<i>$2</i>");
+  s = s.replace(new RegExp("(" + RICH_OPEN + ")_([^_\\s][^_\\n]*?)_(?=" + RICH_CLOSE + ")", "g"), "$1<u>$2</u>");
+  s = s.replace(/\r\n|\r|\n/g, "<br>");
+  /* 3) escape everything … */
+  s = s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  /* 4) … then walk the tag tokens of the ESCAPED string:
+        – whitelisted tags WITHOUT attributes render (<b>, </i>, <br/>)
+        – every other known tag (div/span/a/… or whitelisted WITH
+          attributes like <p style=…>) is dropped, its text kept
+        – closing tags without a live opener are dropped (no orphans)
+        – <script>/<style> swallow their content entirely
+        – tags still open at the end are auto-closed                */
+  const TAG = new RegExp("&lt;\\s*(/?)(" + RICH_KEEP + "|" + RICH_DROP + ")\\b[\\s\\S]*?&gt;", "gi");
+  const stack = [];
+  let skip = null;
+  let out = "";
+  let idx = 0;
+  let t;
+  while ((t = TAG.exec(s))) {
+    if (!skip) out += s.slice(idx, t.index);
+    idx = TAG.lastIndex;
+    const slash = !!t[1];
+    const raw = t[2].toLowerCase();
+    const name = raw === "strong" ? "b" : raw === "em" ? "i" : raw;
+    if (skip) {
+      if (slash && raw === skip) skip = null;
+      continue;
+    }
+    if (raw === "script" || raw === "style") {
+      if (!slash) skip = raw;
+      continue;
+    }
+    const clean = new RegExp("^&lt;\\s*" + (slash ? "/" : "") + raw + "\\s*/?&gt;$", "i").test(t[0]);
+    if (clean && RICH_KEEP_SET.has(name)) {
+      if (name === "br") out += "<br>";
+      else if (slash) {
+        const p = stack.lastIndexOf(name);
+        if (p >= 0) {
+          out += "</" + name + ">";
+          stack.length = p;
+        }
+      } else {
+        out += "<" + name + ">";
+        stack.push(name);
+      }
+    }
+  }
+  if (!skip) out += s.slice(idx);
+  while (stack.length) out += "</" + stack.pop() + ">";
+  return out;
+}
+function plainText(str) {
+  return richHTML(str)
+    .replace(/<br\s*\/?>|<\/?(?:b|strong|i|em|u|s|p|li|ul|ol|sub|sup)>/gi, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function setRich(node, str) {
+  if (node) node.innerHTML = richHTML(str);
+}
+/* [RICH-TEXT-END] */
 
 /* =============== confetti =============== */
 const FX = (() => {
@@ -4415,37 +4522,144 @@ const FX = (() => {
   };
 })();
 /* =============== PeerJS network configuration =============== */
-/* v2.14 – measured on 2026-11-04 (see README-LOGIN-FIX.md):
-   • the old openrelay.metered.ca entries were DEAD weight: the name
-     now resolves to 192.0.2.1 (a reserved blackhole address) and never
-     answers – every join silently waited for their timeouts.
-   • both STUN servers below are verified reachable and answering.
-   • the TURN entries are Metered's documented global relay: the server
-     is alive and completed the full authentication handshake from our
-     test vantage point, but refused the allocation there (likely a
-     datacentre-IP policy). Open turn-check.html (included in the fix)
-     on the classroom Wi-Fi to see whether it relays for you – if not,
-     sign up for your own free Open Relay key (2 minutes, 20 GB/month;
-     a whole quiz needs a few KB) and replace username/credential:
-     https://www.metered.ca/tools/openrelay/                             */
+/* v2.15 – reworked for MOBILE DATA networks (CGNAT/symmetric NAT):
+   joining over cellular fails on every device brand unless a TURN
+   relay actually works. Findings behind this block (2026-11-05,
+   RFC-5766 probe client with long-term-credential handshake):
+   • the old global.relay keypair from the Metered docs page is GONE –
+     the page now documents a shared-secret server instead:
+     staticauth.openrelay.metered.ca + secret "openrelayprojectsecret"
+     (the scheme Nextcloud Talk uses; community reports confirm it is
+     alive in 2025/2026)
+   • credentials for it are generated per page load below (coturn REST
+     scheme: username "<expiry>:feliz", credential = base64 HMAC-SHA1) –
+     they rotate automatically, nothing to maintain
+   • allocations from DATAcentre IPs are refused by Metered (a 400 even
+     for deliberately wrong passwords – an IP policy, not bad creds).
+     Residential/cellular IPs are the intended audience. Verify on the
+     networks that matter with the included turn-check.html (open it on
+     a phone with mobile data!)
+   • STUN servers verified reachable and answering.                    */
+
+/* ---- tiny synchronous HMAC-SHA1 (about 40 lines, no dependency).
+      Only used to mint TURN credentials from a shared secret; verified
+      against Python's hmac module for several test vectors.           */
+function _sha1(bytes) {
+  const ml = bytes.length;
+  const msg = bytes.concat([0x80]);
+  while (msg.length % 64 !== 56) msg.push(0);
+  /* 64-bit big-endian bit length. JS shifts are mod 32, so the high
+     dword is written explicitly (always 0 below 512 MB).            */
+  const bits = ml * 8;
+  msg.push(0, 0, 0, 0);
+  msg.push((bits >>> 24) & 255, (bits >>> 16) & 255, (bits >>> 8) & 255, bits & 255);
+  let h0 = 0x67452301,
+    h1 = 0xefcdab89,
+    h2 = 0x98badcfe,
+    h3 = 0x10325476,
+    h4 = 0xc3d2e1f0;
+  const w = new Array(80);
+  for (let off = 0; off < msg.length; off += 64) {
+    for (let i = 0; i < 16; i++) w[i] = ((msg[off + i * 4] << 24) | (msg[off + i * 4 + 1] << 16) | (msg[off + i * 4 + 2] << 8) | msg[off + i * 4 + 3]) >>> 0;
+    for (let i = 16; i < 80; i++) {
+      const v = w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16];
+      w[i] = (v << 1) | (v >>> 31);
+    }
+    let a = h0,
+      b = h1,
+      c = h2,
+      d = h3,
+      e = h4;
+    for (let i = 0; i < 80; i++) {
+      let f, k;
+      if (i < 20) {
+        f = (b & c) | (~b & d);
+        k = 0x5a827999;
+      } else if (i < 40) {
+        f = b ^ c ^ d;
+        k = 0x6ed9eba1;
+      } else if (i < 60) {
+        f = (b & c) | (b & d) | (c & d);
+        k = 0x8f1bbcdc;
+      } else {
+        f = b ^ c ^ d;
+        k = 0xca62c1d6;
+      }
+      const t = (((a << 5) | (a >>> 27)) + (f + e + k + w[i])) >>> 0;
+      e = d;
+      d = c;
+      c = (b << 30) | (b >>> 2);
+      b = a;
+      a = t;
+    }
+    h0 = (h0 + a) >>> 0;
+    h1 = (h1 + b) >>> 0;
+    h2 = (h2 + c) >>> 0;
+    h3 = (h3 + d) >>> 0;
+    h4 = (h4 + e) >>> 0;
+  }
+  return [h0, h1, h2, h3, h4].map((x) => [(x >>> 24) & 255, (x >>> 16) & 255, (x >>> 8) & 255, x & 255]).flat();
+}
+function _hmacSha1(key, msg) {
+  let k = key.slice(0, 64);
+  if (key.length > 64) k = _sha1(key);
+  while (k.length < 64) k.push(0);
+  const opad = k.map((b) => b ^ 0x5c),
+    ipad = k.map((b) => b ^ 0x36);
+  return _sha1(opad.concat(_sha1(ipad.concat(msg))));
+}
+const _strBytes = (s) => Array.from(s, (ch) => ch.charCodeAt(0) & 0xff);
+function _b64(bytes) {
+  let s = "";
+  bytes.forEach((b) => (s += String.fromCharCode(b)));
+  return btoa(s);
+}
+/* coturn REST credentials from a shared secret: valid <ttl> seconds,
+   minted fresh on every page load – no keys to rotate by hand.       */
+function secretCreds(secret, ttlSeconds, label) {
+  const user = Math.floor(Date.now() / 1000 + (ttlSeconds || 86400)) + ":" + (label || "feliz");
+  return { username: user, credential: _b64(_hmacSha1(_strBytes(secret), _strBytes(user))) };
+}
+
+/* Open Relay shared secret – public by design, documented at
+   https://www.metered.ca/tools/openrelay/ (Nextcloud instructions). */
+const OPENRELAY_SECRET = "openrelayprojectsecret";
+const OR = secretCreds(OPENRELAY_SECRET, 86400, "feliz");
+
 const FELIZ_ICE = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
-  { urls: "turn:global.relay.metered.ca:80", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
-  { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
-  { urls: "turn:global.relay.metered.ca:443?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" },
-  { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "f6507426c0f4f89d0bda02e2", credential: "7YF0907XexAfvkbL" }, /* most firewall-friendly: TLS on 443 */
+  /* Open Relay static-auth TURN – UDP and TCP on 80/443, TLS on 443.
+     The TLS entry is the one that survives even hostile firewalls.  */
+  { urls: "turn:staticauth.openrelay.metered.ca:80", username: OR.username, credential: OR.credential },
+  { urls: "turn:staticauth.openrelay.metered.ca:80?transport=tcp", username: OR.username, credential: OR.credential },
+  { urls: "turn:staticauth.openrelay.metered.ca:443?transport=tcp", username: OR.username, credential: OR.credential },
+  { urls: "turns:staticauth.openrelay.metered.ca:443?transport=tcp", username: OR.username, credential: OR.credential },
+  /* ExpressTURN free tier (free account, 1000 GB/month, port 3478
+     UDP+TCP): get the username/password from the dashboard at
+     expressturn.com and paste them into BOTH entries below.
+  { urls: "turn:free.expressturn.com:3478", username: "PUT-USERNAME-HERE", credential: "PUT-PASSWORD-HERE" },
+  { urls: "turn:free.expressturn.com:3478?transport=tcp", username: "PUT-USERNAME-HERE", credential: "PUT-PASSWORD-HERE" },
+  */
 ];
 const PEER_OPTS = {
   debug: 0,
   config: { iceServers: FELIZ_ICE, iceCandidatePoolSize: 4 },
   /* own broker instead of the public cloud – fixes the iOS 26 Safari
-     WebSocket-over-HTTP/2 bug for good (recipe in README-LOGIN-FIX.md):
-       host: "p.nochalk.ch", port: 443, path: "/", secure: true,
+     WebSocket-over-HTTP/2 bug for good (recipe in README-CONNECT-FIX.md
+     and the ready-made files in selfhost/):
+       host: "p.nochalk.ch", port: 443, path: "/peerjs/", key: "feliz",
+       secure: true,          (trailing slash in the path matters!)
      CRITICAL: that vhost must NOT offer HTTP/2 or HTTP/3 (no "http2 on",
      no QUIC listener), and if nochalk.ch runs behind Cloudflare the
      broker subdomain must be grey-clouded ("DNS only") – otherwise
-     Safari on iOS 26 fails the WebSocket handshake all over again.   */
+     Safari on iOS 26 fails the WebSocket handshake all over again.
+     With your own coturn running (selfhost/), add it with the SAME
+     rolling-credential trick, just with your own secret:
+       const MY = secretCreds("YOUR-COTURN-SECRET", 86400, "feliz");
+       { urls: "turn:p.nochalk.ch:3478", username: MY.username, credential: MY.credential },
+       { urls: "turn:p.nochalk.ch:3478?transport=tcp", username: MY.username, credential: MY.credential },
+       { urls: "turns:p.nochalk.ch:5349?transport=tcp", username: MY.username, credential: MY.credential },   */
 };
 /* =============== names & avatars =============== */
 const ADJ = [
@@ -6174,19 +6388,44 @@ async function handleFile(file) {
 <!-- BEGIN js/host.js -->
 <script  defer>
 "use strict";
-/* v2.14 · host side of the login/reconnect fix – pair with core.js v2.14
-   and client.js v2.14. Changes:
-   • onJoin(): a returning player takes over their old entry even if the
-     old connection never closed (ghost) – no more duplicate players,
-     score and name are kept
-   • conn "close" ignores superseded connections (p.conn !== conn)
-   • setupPeer() assigns G.peer immediately – healing used to dead-end
-     when the broker was down at room start (nothing ever retried)
-   • replacePeer() no longer destroy()s the peer while live players are
-     connected – destroy() closes ALL data connections (peerjs source);
-     the old peer is only retired, its socket cut, players keep playing
-   • join URL: no more "//" or "index.html/" in the QR target
-   • healPeer() replaces a peer that never opened or is already gone   */
+/* v2.17 · reworks the two screens you reported after the first rollout:
+   • TEXT QUESTIONS: show ONLY the correct answer card, with the count
+     of correct answers as a small badge in its TOP RIGHT corner –
+     the exact same .cnt badge the multiple-choice answers use. The
+     old extra counter row/overlay is gone completely.
+   • PODIUM: order is now Podium → reload note + button → THEN the
+     remaining players list (capped to the space left below, "… plus
+     N more"). Podium and button are always visible, on any screen.
+   • ON-SCREEN VERSION BADGE (bottom left, "Feliz v2.17"): instantly
+     shows WHICH code the browser is actually running. If it is not
+     visible after a reload, the browser is still serving an old
+     cached file – hard refresh (Ctrl+F5) and check the upload.
+   • falls back to plain text instead of crashing if core.js is
+     still an older version on some machine
+   v2.16 kept: rich formatting everywhere (<b>, **bold** …), plain-text
+   answer matching, podium fit, text-question reveal.
+   v2.15/2.14 kept: heartbeat, watchdog, relay route, json serialization,
+   iOS-26 detection, busy recovery, bounded reconnects. */
+
+/* v2.17: never crash when an older core.js is cached on this machine –
+   degrade to plain text (tags then show literally, but the game runs) */
+if (typeof setRich !== "function" || typeof plainText !== "function") {
+  window.plainText = (s) => String(s == null ? "" : s);
+  window.setRich = (n, s) => {
+    if (n) n.textContent = s == null ? "" : String(s);
+  };
+  console.warn("[Feliz] core.js older than host.js – formatting inactive, hard-refresh (Ctrl+F5)");
+}
+console.info("[Feliz] host.js v2.17");
+/* v2.17: visible version badge so "old code still served" is provable */
+if (document.body) {
+  const badge = document.createElement("div");
+  badge.textContent = "Feliz v2.17";
+  badge.title = "Zeigt die tatsächlich laufende Version. Fehlt dieses Eckchen nach einem Neuladen, dient der Browser noch eine alte Datei aus dem Cache: hart nachladen (Strg+F5).";
+  badge.style.cssText =
+    "position:fixed;left:8px;bottom:8px;z-index:99999;opacity:.45;font:11px/1.5 monospace;pointer-events:none";
+  document.body.appendChild(badge);
+}
 
 /* =============== host game state =============== */
 const G = {
@@ -6519,10 +6758,77 @@ function closePeer() {
   peerWanted = false;
   destroyAllPeers();
 }
+
+/* =============== v2.15: heartbeat watchdog & wake lock =============== */
+/* Phones that vanish without a close event (battery, tunnel, OS froze
+   the tab) used to look "alive" until the very end. v2.15 clients ping
+   every 5 s; 30 s of silence = link dead. The player STAYS in the list
+   with their score – the client auto-reconnect revives them via the
+   onJoin() takeover. Only applied to players that actually ping (old
+   clients without heartbeat are judged by their close events only).  */
+setInterval(() => {
+  const now = performance.now();
+  let changed = false;
+  G.players.forEach((p) => {
+    if (!p.bot && p.alive && p.pings && p.lastSeen && now - p.lastSeen > 30000) {
+      p.alive = false;
+      changed = true;
+    }
+  });
+  if (changed) {
+    renderLobby();
+    if (G.started) toast("A player lost the connection – they keep their score and can rejoin.");
+  }
+}, 10000);
+
+/* remember which players ping (v2.15 clients) – see watchdog above */
+function notePing(p) {
+  if (p) p.pings = true;
+}
+
+/* a sleeping host machine kills the room for EVERYONE. The screen wake
+   lock keeps the board machine awake while the tab is visible; it is
+   re-acquired automatically after tab switches (browsers release it). */
+let felWakeLock = null;
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && document.visibilityState === "visible") {
+      felWakeLock = await navigator.wakeLock.request("screen");
+      felWakeLock.addEventListener("release", () => {
+        felWakeLock = null;
+      });
+    }
+  } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") keepAwake();
+});
+keepAwake();
+
 function handleConn(conn) {
   conn.on("data", (m) => {
     try {
       if (!m || typeof m !== "object") return;
+      const pl = conn.playerRef;
+      if (pl) {
+        pl.lastSeen = performance.now();
+        if (!pl.alive) {
+          /* zombie link woke up (or watchdog marked them early) – any
+             traffic means the player is back                          */
+          pl.alive = true;
+          if (!G.started) renderLobby();
+        }
+      }
+      if (m.t === "ping") {
+        /* v2.15 heartbeat: answer immediately. Keeps NAT mappings fresh
+           and lets the client watchdog notice silent links.             */
+        notePing(pl);
+        if (conn.open)
+          try {
+            conn.send({ t: "pong" });
+          } catch (e) {}
+        return;
+      }
       if (m.t === "join") {
         if (G.started && G.mode === "waage") {
           conn.send({ t: "busy" });
@@ -6550,7 +6856,7 @@ function handleConn(conn) {
         if (!q) return;
         let ok = false;
         if (Array.isArray(m.order)) ok = String(m.order.map(Number)) === String(q.correctOrder);
-        else if (typeof m.text === "string") ok = q.acceptN.includes(m.text.trim().slice(0, 64).toLowerCase());
+        else if (typeof m.text === "string") ok = acceptList(q).includes(plainText(m.text.slice(0, 64)).toLowerCase());
         else ok = (m.c | 0) === q.correct;
         conn.send({ t: "waageFeedback", ok });
         if (ok) waageAddUnit(p);
@@ -6621,9 +6927,10 @@ function onJoin(conn, m) {
     G.players.push(p);
   }
   conn.playerRef = p;
+  p.lastSeen = performance.now();
   renderLobby();
   SFX.join();
-  conn.send({ t: "welcome", name: p.name, animal: p.animal, color: p.color, total: G.quiz ? G.quiz.questions.length : 0 });
+  conn.send({ t: "welcome", name: p.name, animal: p.animal, color: p.color, total: G.quiz ? G.quiz.questions.length : 0, net: 2 });
   /* late joiner in the middle of a running question: push it directly */
   if (G.started && G.state === "active" && G.q) {
     const q = G.q;
@@ -6646,6 +6953,7 @@ function renderLobby() {
   grid.innerHTML = "";
   G.players.forEach((p) => {
     const chip = el("div", "pchip");
+    if (!p.alive) chip.style.opacity = ".35"; /* v2.15: offline, may return */
     chip.appendChild(avEl(p));
     chip.appendChild(el("span", "", p.name));
     grid.appendChild(chip);
@@ -6722,7 +7030,11 @@ function renderStage(q) {
   const qcol = el("div", "qcol");
   qSlotEl = el("div", "qslot");
   qSlotEl.appendChild(el("div", "qmeta", qTypeName(q) + " · " + (G.qi + 1) + " of " + G.order.length));
-  if (q.type === "info" && q.desc) qSlotEl.appendChild(el("div", "qdesc", q.desc));
+  if (q.type === "info" && q.desc) {
+    const qd = el("div", "qdesc");
+    setRich(qd, q.desc); /* v2.16: formatting renders, tags never show */
+    qSlotEl.appendChild(qd);
+  }
   qcol.appendChild(qSlotEl);
   timerBoxEl = el("div", "timerwrap");
   timerBoxEl.title = "Click or press space: time runs out";
@@ -6835,7 +7147,7 @@ function renderStage(q) {
       const b = el("div", "ans a" + (i + 1));
       if (q.type !== "order") b.innerHTML = '<svg class="ashape"><use href="#' + SHAPES[i] + '"/></svg>';
       b.innerHTML += '<span class="atext"></span><span class="cnt" hidden></span>';
-      b.querySelector(".atext").textContent = a;
+      setRich(b.querySelector(".atext"), a); /* v2.16: formatting renders */
       anscol.appendChild(b);
       answerEls.push(b);
     });
@@ -6849,7 +7161,7 @@ function playIntro() {
   G.state = "intro";
   SFX.intro();
   introLabel.textContent = qTypeName(G.q) + " · " + (G.qi + 1) + " of " + G.order.length;
-  qText.textContent = G.q.text;
+  setRich(qText, G.q.text); /* v2.16: formatting renders, tags never show */
   introSlot.appendChild(qText);
   introOverlay.style.transition = "none";
   introOverlay.classList.remove("off");
@@ -7002,10 +7314,28 @@ function recordAnswer(p, sel, ms) {
     }, 400);
   }
 }
+/* v2.16: accepted answers may carry formatting ("<b>Paris</b>") – the
+   comparison runs on the PLAIN text of both sides. Cached per question,
+   so it costs one pass per question, not per answer.                  */
+function acceptList(q) {
+  if (!q._acc) {
+    const set = new Set();
+    (Array.isArray(q.accept) ? q.accept : []).forEach((x) => {
+      const t = plainText(x).toLowerCase();
+      if (t) set.add(t);
+    });
+    (Array.isArray(q.acceptN) ? q.acceptN : []).forEach((x) => {
+      const t = plainText(x).toLowerCase();
+      if (t) set.add(t);
+    });
+    q._acc = [...set];
+  }
+  return q._acc;
+}
 function answerIsCorrect(q, a) {
   if (!a) return false;
   if (q.type === "order") return String(a.sel) === String(q.correctOrder);
-  if (q.type === "input") return q.acceptN.includes(String(a.sel).toLowerCase().trim());
+  if (q.type === "input") return acceptList(q).includes(plainText(a.sel).toLowerCase());
   return a.sel === q.correct;
 }
 function endQuestion() {
@@ -7105,14 +7435,16 @@ function renderResultsInput(correctCount) {
   const q = G.q;
   const card = answerEls[0];
   setTimeout(() => {
-    card.classList.add("revealed");
-    card.innerHTML = '<span class="sol"></span>';
-    card.querySelector(".sol").textContent = q.accept[0];
-    const ov = el("div", "ordercount");
-    ov.innerHTML = '<div class="oc"><b>0</b><span>correct answers</span></div>';
-    anscolEl.appendChild(ov);
-    const total = G.players.filter((p) => p.alive).length;
-    countUp(ov.querySelector("b"), correctCount, 600, (v) => String(Math.round(v)) + " / " + total);
+    /* v2.17: exactly ONE card – the correct answer – with the counter
+       in its TOP RIGHT corner, the same .cnt badge the multiple-choice
+       answers use ("7" = seven players were right). No overlay, no
+       extra row, nothing that can cover the solution.              */
+    card.classList.add("revealed", "ok");
+    card.innerHTML = '<span class="sol"></span><span class="cnt" hidden></span>';
+    setRich(card.querySelector(".sol"), q.accept && q.accept[0] ? q.accept[0] : "—"); /* formatting renders */
+    const cntEl = card.querySelector(".cnt");
+    cntEl.hidden = false;
+    countUp(cntEl, correctCount, 600, (v) => String(Math.round(v)));
   }, 480);
 }
 function showScoreboard() {
@@ -7235,6 +7567,55 @@ function updateSoloOrder() {
 
 /* =============== podium =============== */
 let podInt = null;
+/* v2.17 order: Podium → reload note + button → remaining list.
+   The list is capped to the space that is really left BELOW the
+   button row ("… plus N more" summarizes the rest), so the podium
+   and the button stay fully visible with ANY number of players.
+   Runs several times because the podium blocks animate their height
+   in – every run recomputes from scratch, so it stays correct and
+   survives a resize.                                            */
+function fitPodiumRest(wrap, rest, rows) {
+  const screen = wrap.closest(".screen") || wrap.parentElement;
+  if (!screen || !rows.length) return;
+  let rowH = 0;
+  const fit = () => {
+    if (!rest.isConnected) return;
+    /* anchor: the button row (or the podium if it is missing) – the
+       list starts right below it                                  */
+    const anchor = wrap.querySelector(".podctl") || wrap.querySelector(".podium");
+    if (!anchor) return;
+    const ab = anchor.getBoundingClientRect();
+    const sb = screen.getBoundingClientRect();
+    /* anything that still sits below the wrap inside the screen must
+       stay visible – measure instead of guessing                      */
+    let after = 0,
+      seen = false;
+    [...screen.children].forEach((ch) => {
+      if (ch === wrap) seen = true;
+      else if (seen) after += ch.getBoundingClientRect().height + 8;
+    });
+    const visRow = rows.find((r) => r.style.display !== "none");
+    if (visRow) rowH = visRow.getBoundingClientRect().height || rowH || 44;
+    const avail = sb.bottom - Math.max(ab.bottom, sb.top) - 14 - after;
+    const SUMMARY = 48;
+    let keep = Math.floor((avail - SUMMARY) / Math.max(rowH || 44, 24));
+    keep = Math.max(0, Math.min(rows.length, keep));
+    rows.forEach((r, i) => (r.style.display = i < keep ? "" : "none"));
+    const more = rows.length - keep;
+    let sum = rest.querySelector(".podmore");
+    if (more > 0) {
+      if (!sum) {
+        sum = el("div", "podmore");
+        sum.style.cssText = "display:flex;align-items:center;justify-content:center;gap:8px;opacity:.8";
+        rest.appendChild(sum);
+      }
+      sum.style.display = "flex";
+      sum.textContent = "… plus " + more + " more player" + (more === 1 ? "" : "s");
+    } else if (sum) sum.style.display = "none";
+  };
+  [120, 600, 1200, 1800].forEach((ms) => setTimeout(fit, ms));
+  addEventListener("resize", fit, { once: true });
+}
 function showPodium() {
   G.state = "podium";
   clearPhase();
@@ -7275,8 +7656,21 @@ function showPodium() {
       );
     });
     wrap.appendChild(pod);
+    /* v2.17: the reload note + the button sit DIRECTLY below the
+       podium – always visible – and only then the list follows.
+       Moving the existing nodes (instead of creating new ones) keeps
+       their ids, styles and click listeners intact.               */
+    const ctl = el("div", "podctl");
+    ctl.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:center;margin:12px 0 2px";
+    const note = $("#podNote"),
+      btn = $("#podBtn");
+    if (note) ctl.appendChild(note);
+    if (btn) ctl.appendChild(btn);
+    wrap.appendChild(ctl);
     if (ranked.length > 3) {
       const rest = el("div", "podrest");
+      const rows = [];
       ranked.slice(3).forEach((p, i) => {
         const r = el("div", "rrow");
         r.appendChild(el("span", "rk", String(i + 4)));
@@ -7284,8 +7678,12 @@ function showPodium() {
         r.appendChild(el("span", "nm", p.name));
         r.appendChild(el("span", "pts", p.score.toLocaleString("en-US")));
         rest.appendChild(r);
+        rows.push(r);
       });
       wrap.appendChild(rest);
+      /* v2.17: list runs BELOW the button row – capped to the space
+         that is left there ("… plus N more")                        */
+      fitPodiumRest(wrap, rest, rows);
     }
   }
   FX.burst();
@@ -8512,17 +8910,44 @@ function pvQEl(q, idx) {
 "use strict";
 
 /* =============== client (player device) =============== */
-/* v2.14 – login fix for iPhone 17 / newer devices:
-   • serialization "json" – Safari drops binary-packed messages
-     (peers/peerjs #587, #599); the host adapts automatically
-   • detects the iOS 26 Safari WebSocket-over-HTTP/2 bug (the public
-     broker 0.peerjs.com negotiates h2) and shows a working workaround
-     instead of a greyed-out button
-   • a signalling socket that dies silently fails fast after two drops
-     (PeerJS used to retry it internally forever – "nothing happens")
-   • "busy" hands the Join button back; the mid-game reconnect stops
-     after 8 rounds and returns to the join screen with a message     */
-const C = { room: "", my: null, me: null, peer: null, conn: null, qi: -1, qT0: 0, answered: false, finished: false, retryTO: null, noRetry: false, recTries: 0 };
+/* v2.17 – on top of v2.16:
+   • falls back to plain text instead of crashing if core.js is still
+     an older version on some device (tags would show literally, but
+     joining and playing keep working)
+   • logs its version in the console for cache diagnostics
+   v2.16 – UI fixes, on top of v2.15:
+   • question/answer/info texts from Kahoot imports render their
+     formatting (<b>, **bold**, *italic*, _underline_, <br>, <sub>/<sup>)
+     instead of showing the tags literally – safe whitelist in
+     core.js richHTML(); typed answers still match formatted accepted
+     answers (host compares plain text)
+   v2.15 – cellular-data & disconnect fix, on top of v2.14:
+   • MOBILE DATA: joining used to fail on every device brand when the
+     phone was on cellular (CGNAT/symmetric NAT: hole punching cannot
+     work without a TURN relay). Route 1 now tries direct, route 2
+     forces the TURN relay (iceTransportPolicy "relay" – a fresh Peer,
+     because PeerJS only reads the config from the Peer options)
+   • KEEPALIVE: a tiny ping every 5 s keeps the NAT mapping fresh –
+     cellular CGNAT/NAT64 networks drop idle UDP flows after 30–120 s,
+     the #1 cause of mid-game disconnects. The v2.15 host answers
+     with "pong" and also revives players cleanly
+   • WATCHDOG: if nothing arrives for 22 s while connected, the link is
+     treated as dead and the auto-reconnect kicks in (only with a
+     v2.15 host, detected via the "net" flag in the welcome message)
+   • returning to the foreground after the OS froze the tab reconnects
+     immediately instead of showing a dead screen
+   v2.14 fixes kept: json serialization, iOS-26 detection, fail-fast
+   on dead signalling sockets, busy recovery, bounded reconnects   */
+/* v2.17: if this device still runs an older core.js, degrade to plain
+   text instead of crashing – the game keeps running               */
+if (typeof setRich !== "function" || typeof plainText !== "function") {
+  window.plainText = (s) => String(s == null ? "" : s);
+  window.setRich = (n, s) => {
+    if (n) n.textContent = s == null ? "" : String(s);
+  };
+}
+console.info("[Feliz] client.js v2.17");
+const C = { room: "", my: null, me: null, peer: null, conn: null, qi: -1, qT0: 0, answered: false, finished: false, retryTO: null, noRetry: false, recTries: 0, hostNet: 0, lastRx: 0, hbInt: null, recRelay: false };
 
 function showC(id) {
   document.querySelectorAll("#client .cscr").forEach((s) => s.classList.toggle("on", s.id === id));
@@ -8658,14 +9083,28 @@ function stopRetry() {
 /* ---- connection with timeout, error handling and retries ----
    One failed attempt used to end in "room not found" or a greyed
    button. The public broker is flaky under load (a whole class hits
-   it from one school IP) – a fresh retry fixes most cases.        */
+   it from one school IP) – a fresh retry fixes most cases.
+
+   v2.15 route logic for mobile data (CGNAT/symmetric NAT):
+   route 1 = normal ICE (direct + relay candidates in parallel);
+   if the broker socket opened but the data connection never did,
+   hole punching failed → route 2 recreates the Peer with
+   iceTransportPolicy "relay" so ONLY the TURN relay is used.
+   PeerJS takes the RTC config from the Peer options only (checked
+   against the 1.5.5 source) – per-connection overrides do not
+   exist, hence the fresh Peer.                                        */
 const JOIN_TRIES = 3;
+function relayPeerOpts() {
+  return Object.assign({}, PEER_OPTS, {
+    config: Object.assign({}, PEER_OPTS.config, { iceTransportPolicy: "relay", iceCandidatePoolSize: 2 }),
+  });
+}
 function connectClient() {
   if (C.peer) return;
   stopRetry();
   C.retryCount = 0;
   $("#btnJoin").disabled = true;
-  attemptJoin(1);
+  attemptJoin(1, false);
 }
 
 /* iOS 26 Safari cannot open the signalling WebSocket when the broker
@@ -8680,9 +9119,11 @@ function isIOS26Safari() {
 const IOS26_HINT =
   "This iPhone (iOS 26 + Safari) hits a known connection bug. Open this page in Firefox or Chrome on this phone – or switch off Settings › [your name] › iCloud › Private Relay, reload and try again.";
 
-function attemptJoin(n) {
+function attemptJoin(n, relayOnly) {
   const st = $("#cjStatus");
-  st.textContent = "Connecting to room " + C.room + " …" + (n > 1 ? " (try " + n + "/" + JOIN_TRIES + ")" : "");
+  st.textContent = relayOnly
+    ? "Direct route failed – trying the relay server (route 2/2) …"
+    : "Connecting to room " + C.room + " …" + (n > 1 ? " (try " + n + "/" + JOIN_TRIES + ")" : "");
   const P = window.Peer;
   if (!P) {
     st.textContent = "Connection service unavailable (offline?).";
@@ -8691,48 +9132,76 @@ function attemptJoin(n) {
   }
   let settled = false,
     opened = false,
-    conn = null,
-    giveUp = 0;
-  const peer = new P(PEER_OPTS);
+    conn = null;
+  let brokerTO = 0,
+    connTO = 0;
+  const peer = new P(relayOnly ? relayPeerOpts() : PEER_OPTS);
   C.peer = peer;
 
-  const fail = (msg, again) => {
-    if (settled || C.finished) return;
-    settled = true;
-    clearTimeout(giveUp);
+  const teardown = () => {
+    clearTimeout(brokerTO);
+    clearTimeout(connTO);
     try {
       peer.destroy();
     } catch (e) {}
     if (C.peer === peer) C.peer = null;
+  };
+  const fail = (msg, again) => {
+    if (settled || C.finished) return;
+    settled = true;
+    teardown();
     if (again && n < JOIN_TRIES)
       setTimeout(() => {
-        if (!C.finished && !C.peer) attemptJoin(n + 1);
+        if (!C.finished && !C.peer) attemptJoin(n + 1, false);
       }, 1200);
     else {
       st.textContent = msg;
       $("#btnJoin").disabled = false;
     }
   };
-  giveUp = setTimeout(() => {
+
+  /* phase 1: the signalling socket to the broker must open */
+  brokerTO = setTimeout(() => {
+    if (settled) return;
     /* nothing happened at all: on iOS 26 Safari that is the known
        WebSocket-over-HTTP/2 bug – retrying cannot fix it            */
     const ios26 = !opened && isIOS26Safari();
-    fail(ios26 ? IOS26_HINT : "Could not reach the room. Check the code and the Wi-Fi, then try again.", !ios26);
+    fail(ios26 ? IOS26_HINT : "Could not reach the room service. Check the code and the connection, then try again.", !ios26);
   }, 12000);
 
   peer.on("open", () => {
     if (settled) return;
     opened = true;
+    clearTimeout(brokerTO);
     /* "json" instead of binary packing: Safari on iOS drops or mangles
        BinaryPack messages (peers/peerjs #587, #599) – every Feliz
        message is plain JSON anyway. The host side adapts to this
        automatically, host.js needs no change.                        */
     conn = peer.connect(C.room, { reliable: true, serialization: "json" });
+
+    /* phase 2: the data connection itself (ICE). The broker being OK
+       while this times out = hole punching failed → relay route.    */
+    connTO = setTimeout(() => {
+      if (settled) return;
+      if (!relayOnly) {
+        settled = true;
+        teardown();
+        attemptJoin(n, true);
+      } else {
+        fail(
+          "Still no connection. If you are on mobile data, this network blocks the relay route – try Wi-Fi, or ask the host to set up the school's own relay server (README-CONNECT-FIX.md).",
+          true,
+        );
+      }
+    }, 11000);
+
     conn.on("open", () => {
       if (settled) return;
       settled = true;
-      clearTimeout(giveUp);
+      clearTimeout(connTO);
       C.conn = conn;
+      feedRx();
+      startHB();
       conn.send({ t: "join", name: C.my.name, animal: C.my.animal, color: C.my.color });
       st.textContent = "Joining …";
     });
@@ -8770,25 +9239,81 @@ function attemptJoin(n) {
   });
 }
 
+/* ---- keepalive & link watchdog ---------------------------------
+   A tiny ping every 5 s refreshes the NAT mapping (cellular CGNAT and
+   NAT64 carriers drop idle UDP flows after 30–120 s – the classic
+   "it worked and then everyone dropped" pattern). v2.15 hosts answer
+   with "pong" (net flag 2 in the welcome message); the watchdog then
+   also detects silent links. Older hosts ignore the pings safely.  */
+const HB_MS = 5000,
+  HB_SILENT_MS = 22000;
+function feedRx() {
+  C.lastRx = performance.now();
+}
+function startHB() {
+  stopHB();
+  C.hbInt = setInterval(() => {
+    if (C.finished) return;
+    if (C.conn && C.conn.open) {
+      try {
+        C.conn.send({ t: "ping" });
+      } catch (e) {}
+    }
+    if (C.hostNet >= 2 && C.lastRx && performance.now() - C.lastRx > HB_SILENT_MS) lostConnection();
+  }, HB_MS);
+}
+function stopHB() {
+  if (C.hbInt) {
+    clearInterval(C.hbInt);
+    C.hbInt = null;
+  }
+}
+
 /* a live connection broke mid-game → wait screen + auto reconnect */
 function lostConnection() {
   if (C.finished) return;
   C.conn = null;
+  C.lastRx = 0; /* stop the watchdog from re-firing while offline */
   showC("c-wait");
   $("#cwStatus").textContent = "Connection lost – reconnecting …";
   scheduleReconnect();
 }
 
+/* returning to the foreground: the OS froze the tab in the background
+   (iOS/Android suspend timers and sockets). If the link died in that
+   time, reconnect immediately instead of showing a dead screen.     */
+function onResume() {
+  if (C.finished) return;
+  if (C.conn && C.conn.open) {
+    feedRx();
+    return;
+  }
+  if (C.peer && !C.peer.destroyed && !C.peer.disconnected) return; /* still connecting */
+  if (!C.retryTO && !C.noRetry) scheduleReconnect(0);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") onResume();
+});
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) onResume();
+});
+
 /* automatic reconnection with the same identity (the host revives the
    player – including their score). Stops after REC_TRIES rounds and
-   hands the Join button back instead of spinning forever.            */
+   hands the Join button back instead of spinning forever.
+   v2.15: reconnect rounds ALTERNATE direct/relay, so a player on
+   cellular data whose direct route never comes back still rejoins
+   via TURN; scheduleReconnect(0) reconnects immediately (used when
+   the tab returns from the background).                              */
 const REC_TRIES = 8;
-function scheduleReconnect() {
+function scheduleReconnect(delay) {
   if (C.finished || C.noRetry || C.retryTO) return;
+  if (document.hidden && C.recTries > 2) C.recTries = 0; /* don't burn attempts while the tab is frozen */
   C.recTries = (C.recTries || 0) + 1;
   if (C.recTries > REC_TRIES) {
     C.recTries = 0;
     C.conn = null;
+    stopHB();
     try {
       if (C.peer) C.peer.destroy();
     } catch (_) {}
@@ -8812,8 +9337,11 @@ function scheduleReconnect() {
     if (!P) return;
     let opened = false,
       giveUp = 0;
-    /* the room may still be re-registering on the host side – but if
-       the socket never opens within 10 s, try a fresh round          */
+    /* alternate the route: even rounds direct, odd rounds relay-only.
+       The room may still be re-registering on the host side – but if
+       the socket never opens within 10 s, try a fresh round.          */
+    C.recRelay = !C.recRelay;
+    $("#cwStatus").textContent = "Connection lost – reconnecting …" + (C.recRelay ? " (relay route)" : "");
     giveUp = setTimeout(() => {
       if (opened) return;
       try {
@@ -8822,13 +9350,15 @@ function scheduleReconnect() {
       C.peer = null;
       scheduleReconnect();
     }, 10000);
-    C.peer = new P(PEER_OPTS);
+    C.peer = new P(C.recRelay ? relayPeerOpts() : PEER_OPTS);
     C.peer.on("open", () => {
       opened = true;
       clearTimeout(giveUp);
       const conn = C.peer.connect(C.room, { reliable: true, serialization: "json" });
       C.conn = conn;
       conn.on("open", () => {
+        feedRx();
+        startHB();
         /* use the name the server assigned – it may differ from the chosen one */
         conn.send({ t: "join", name: (C.me && C.me.name) || C.my.name, animal: (C.me && C.me.animal) || C.my.animal, color: C.my.color });
       });
@@ -8849,7 +9379,7 @@ function scheduleReconnect() {
       C.peer = null;
       scheduleReconnect();
     });
-  }, 4000);
+  }, delay == null ? 4000 : delay);
 }
 
 /* touch-friendly drag & drop sortable list for ordering questions */
@@ -8914,11 +9444,13 @@ function makeSortable(list, onChange) {
 }
 function onServer(m) {
   if (!m || typeof m !== "object") return;
+  feedRx(); /* any traffic proves the link is alive */
   switch (m.t) {
     case "welcome": {
       C.retryCount = 0;
       stopRetry();
       C.recTries = 0;
+      C.hostNet = m.net || 0; /* v2.15 host = 2: answers pings, revives silently */
       C.me = m;
       if (COLORS.includes(m.color)) {
         C.my.color = m.color;
@@ -8942,7 +9474,7 @@ function onServer(m) {
       C.answered = false;
       C.qi = m.i;
       C.qT0 = performance.now();
-      $("#cqText").textContent = m.text;
+      setRich($("#cqText"), m.text); /* v2.16: formatting renders */
       const img = $("#cqImg");
       if (m.media && m.media.src) {
         img.hidden = false;
@@ -8958,7 +9490,11 @@ function onServer(m) {
         btns.style.gridTemplateColumns = "";
         btns.innerHTML = "";
         const box = el("div", "cinfobox");
-        if (m.desc) box.appendChild(el("p", "cid", m.desc));
+        if (m.desc) {
+          const d = el("p", "cid");
+          setRich(d, m.desc); /* v2.16: formatting renders */
+          box.appendChild(d);
+        }
         box.appendChild(el("p", "cinote", "ℹ Info – no answer needed"));
         btns.appendChild(box);
         foot.textContent = "";
@@ -9002,7 +9538,7 @@ function onServer(m) {
           const b = el("div", "scard a" + (i + 1));
           b.dataset.idx = i;
           b.innerHTML = '<span class="pos"></span><span class="txt"></span>';
-          b.querySelector(".txt").textContent = a;
+          setRich(b.querySelector(".txt"), a); /* v2.16: formatting renders */
           btns.appendChild(b);
         });
         [...btns.children].forEach((x, i) => {
@@ -9030,7 +9566,9 @@ function onServer(m) {
         m.ans.forEach((a, i) => {
           const b = el("button", "abtn a" + (i + 1));
           b.innerHTML = '<svg><use href="#' + SHAPES[i] + '"/></svg>';
-          b.appendChild(el("span", "", a));
+          const sp = el("span");
+          setRich(sp, a); /* v2.16: formatting renders */
+          b.appendChild(sp);
           b.addEventListener("click", () => {
             if (C.answered) return;
             C.answered = true;
@@ -9069,6 +9607,7 @@ function onServer(m) {
     case "finish": {
       C.finished = true;
       stopRetry();
+      stopHB();
       C.waage = null;
       $("#endRank").textContent = m.you ? "Place " + m.you.rank : "Round over";
       if (m.you) {
@@ -9095,9 +9634,13 @@ function onServer(m) {
       SFX.fanfare();
       break;
     }
-    case "busy":
+    case "pong":
+      /* heartbeat answer – feedRx() already refreshed the watchdog */
+      break;
+    case "busy": {
       C.noRetry = true; /* this round can't be joined – stop retrying */
       stopRetry();
+      stopHB();
       C.conn = null;
       try {
         if (C.peer) C.peer.destroy();
@@ -9106,6 +9649,7 @@ function onServer(m) {
       $("#btnJoin").disabled = false; /* let them try again next round */
       $("#cjStatus").textContent = "This round is already running – wait for the next one, then press Join again.";
       break;
+    }
   }
 }
 /* balance mode: self-paced questions, one after another */
@@ -9114,7 +9658,7 @@ function showWaageQuestion() {
   if (!m) return;
   C.answered = false;
   C.qT0 = performance.now();
-  $("#cqText").textContent = m.text;
+  setRich($("#cqText"), m.text); /* v2.16: formatting renders */
   const img = $("#cqImg");
   if (m.media && m.media.src) {
     img.hidden = false;
@@ -9130,7 +9674,11 @@ function showWaageQuestion() {
     btns.style.gridTemplateColumns = "";
     btns.innerHTML = "";
     const box = el("div", "cinfobox");
-    if (m.desc) box.appendChild(el("p", "cid", m.desc));
+    if (m.desc) {
+      const d = el("p", "cid");
+      setRich(d, m.desc); /* v2.16: formatting renders */
+      box.appendChild(d);
+    }
     box.appendChild(el("p", "cinote", "ℹ Info"));
     btns.appendChild(box);
     foot.textContent = "";
@@ -9194,7 +9742,7 @@ function showWaageQuestion() {
       const b = el("div", "scard a" + (i + 1));
       b.dataset.idx = i;
       b.innerHTML = '<span class="pos"></span><span class="txt"></span>';
-      b.querySelector(".txt").textContent = a;
+      setRich(b.querySelector(".txt"), a); /* v2.16: formatting renders */
       btns.appendChild(b);
     });
     [...btns.children].forEach((x, i) => {
@@ -9219,7 +9767,9 @@ function showWaageQuestion() {
     m.ans.forEach((a, i) => {
       const b = el("button", "abtn a" + (i + 1));
       b.innerHTML = '<svg><use href="#' + SHAPES[i] + '"/></svg>';
-      b.appendChild(el("span", "", a));
+      const sp = el("span");
+      setRich(sp, a); /* v2.16: formatting renders */
+      b.appendChild(sp);
       b.addEventListener("click", () => {
         if (C.answered) return;
         [...btns.children].forEach((x) => x.classList.add("lock"));
@@ -9271,6 +9821,7 @@ function ensureColorDots() {
 ensureColorDots();
 $("#endBtn").addEventListener("click", () => {
   stopRetry();
+  stopHB();
   try {
     if (C.peer) C.peer.destroy();
   } catch (_) {}
@@ -9279,6 +9830,8 @@ $("#endBtn").addEventListener("click", () => {
   C.finished = false;
   C.noRetry = false;
   C.me = null;
+  C.hostNet = 0;
+  C.lastRx = 0;
   C.waage = null;
   C.recTries = 0;
   $("#btnJoin").disabled = false;
