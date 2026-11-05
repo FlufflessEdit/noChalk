@@ -7339,9 +7339,97 @@ $("#podBtn").addEventListener("click", () => {
    above onto the liquid surface. The first glass to overflow
    wins.                                                 */
 
+/* v2.16 (UI-fix package): the maximum fill height is
+   configurable. The setup dialog gets a number field
+   "Units until full" (5–500, injected by script – no HTML
+   edit needed) whose value is remembered per browser in
+   localStorage ("feliz.waage.cap"). Default stays the old
+   suggestion (10 × largest team). The glasses keep their
+   on-screen size for ANY limit: when the limit grows, one
+   unit simply becomes thinner (down to 0.25 px) instead of
+   the glass growing off-screen – large classes no longer
+   see the round end after barely a minute. The team counters
+   now show exact logic units (incl. head start) "x / cap". */
+
 const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100 };
 const WPHYS = { tilt: 0, vel: 0, target: 0, raf: 0, root: null, lastT: 0 };
 const W_BASE = 7; /* px – every player exists as a base layer */
+
+/* ---- v2.16: configurable fill limit ---- */
+const W_CAP_KEY = "feliz.waage.cap";
+const W_CAP_MIN = 5;
+const W_CAP_MAX = 500;
+function clampCap(v) {
+  return Math.min(W_CAP_MAX, Math.max(W_CAP_MIN, Math.round(v)));
+}
+function storedCap() {
+  try {
+    const n = parseInt(localStorage.getItem(W_CAP_KEY), 10);
+    return isFinite(n) && n >= W_CAP_MIN ? Math.min(W_CAP_MAX, n) : null;
+  } catch (e) {
+    return null; /* private mode / storage blocked – feature still works, just without memory */
+  }
+}
+function saveCap(C) {
+  try {
+    localStorage.setItem(W_CAP_KEY, String(C));
+  } catch (e) {
+    /* same as above: never break the game over storage */
+  }
+}
+function setCap(C) {
+  WAAGE.caps = [C, C];
+  const info = document.getElementById("wCapInfo");
+  if (info) info.textContent = String(C);
+  return C;
+}
+/* Injects the number field into the existing setup dialog
+   (right below the capacity info line). Runs once – later
+   calls just return the field. Keeps the dialog HTML of the
+   repo untouched.                                        */
+function ensureCapRow() {
+  let inp = document.getElementById("wCapInp");
+  if (inp) return inp;
+  const anchor = document.getElementById("wCapInfo") || document.getElementById("wInfoA");
+  if (!anchor || !anchor.parentNode) return null; /* unknown dialog – game continues with the suggestion */
+  const lab = document.createElement("label");
+  lab.textContent = "Units until full:";
+  lab.style.cssText = "opacity:.75;white-space:nowrap";
+  inp = document.createElement("input");
+  inp.type = "number";
+  inp.id = "wCapInp";
+  inp.min = String(W_CAP_MIN);
+  inp.max = String(W_CAP_MAX);
+  inp.step = "5";
+  inp.setAttribute("inputmode", "numeric");
+  inp.title = "How many units fill one glass until it overflows. 5–500. Default: 10 × largest team. Remembered on this device.";
+  inp.style.cssText =
+    "width:96px;padding:4px 8px;text-align:center;font:inherit;color:inherit;background:transparent;border:1px solid currentColor;border-radius:8px";
+  const row = document.createElement("div");
+  row.style.cssText = "display:flex;gap:8px;align-items:center;justify-content:center;margin:8px 0";
+  row.appendChild(lab);
+  row.appendChild(inp);
+  anchor.parentNode.insertBefore(row, anchor.nextSibling);
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("#wStart").click();
+    if (e.key === "Escape") closeWaageSetup();
+  });
+  inp.addEventListener("input", () => {
+    const n = parseInt(inp.value, 10);
+    if (isFinite(n) && n >= W_CAP_MIN) {
+      const C = clampCap(n);
+      setCap(C);
+      saveCap(C);
+    }
+  });
+  inp.addEventListener("change", () => {
+    /* tidy up: empty / out-of-range entries fall back to the current cap */
+    const n = parseInt(inp.value, 10);
+    if (!isFinite(n) || n < W_CAP_MIN) inp.value = String(WAAGE.caps[0]);
+    else if (String(clampCap(n)) !== inp.value) inp.value = String(clampCap(n));
+  });
+  return inp;
+}
 
 /* ---- setup dialog ---- */
 function openWaageSetup() {
@@ -7371,6 +7459,14 @@ function openWaageSetup() {
   $("#wInfoB").textContent = nB + (nB === 1 ? " player" : " players") + " · suggested start: " + sB;
   $("#wStartA").value = sA;
   $("#wStartB").value = sB;
+  /* v2.16: fill-limit field – prefilled with the remembered value,
+     otherwise with today's suggestion; caps + info line follow it */
+  const capInp = ensureCapRow();
+  if (capInp) {
+    const s = storedCap();
+    capInp.value = String(s != null ? s : C);
+    setCap(parseInt(capInp.value, 10) || C);
+  }
   $("#waageSetup").hidden = false;
   setTimeout(() => $("#wStartA").select(), 80);
 }
@@ -7388,6 +7484,13 @@ $("#waageSetup").addEventListener("click", (e) => {
   }),
 );
 $("#wStart").addEventListener("click", () => {
+  /* v2.16: the field wins over whatever was suggested */
+  const capInp = document.getElementById("wCapInp");
+  if (capInp) {
+    const n = parseInt(capInp.value, 10);
+    if (isFinite(n) && n >= W_CAP_MIN) setCap(clampCap(n));
+    saveCap(WAAGE.caps[0]);
+  }
   const C = WAAGE.caps[0];
   const cl = (v) => {
     const n = parseInt(v, 10);
@@ -7514,7 +7617,11 @@ function buildScale() {
   const C = Math.max(WAAGE.caps[0], WAAGE.caps[1], 1);
   const maxN = Math.max(WAAGE.teams[0].length, WAAGE.teams[1].length, 1);
   const avail = Math.max(120, 340 - maxN * W_BASE);
-  const unit = Math.max(5, Math.min(15, Math.floor(avail / C)));
+  /* v2.16: unit may shrink below 5 px (down to 0.25 px) – the glass
+     keeps its size for any fill limit instead of growing off-screen
+     (the old 5 px floor made rim ≈ 5 × cap, i.e. ~600 px+ glasses
+     for large classes). For caps up to ~48 nothing changes.     */
+  const unit = Math.max(0.25, Math.min(15, avail / C));
   const rim = C * unit + maxN * W_BASE; /* inner height – identical for both glasses */
   WAAGE.unit = unit;
   WAAGE.rim = rim;
@@ -7612,7 +7719,9 @@ function updateScales() {
   document.querySelectorAll(".wroot").forEach((r) => updateScale(r));
   document.querySelectorAll("[data-wfill]").forEach((n) => {
     const t = +n.dataset.wfill;
-    n.textContent = Math.round(teamFillPxVis(t) / WAAGE.unit) + " / " + Math.round(WAAGE.rim / WAAGE.unit);
+    /* v2.16: exact logic units (incl. head start) instead of a
+       px-derived value – correct numbers even for very thin units */
+    n.textContent = WAAGE.starts[t] + WAAGE.teams[t].reduce((s, p) => s + visUnits(p), 0) + " / " + WAAGE.caps[t];
   });
 }
 
