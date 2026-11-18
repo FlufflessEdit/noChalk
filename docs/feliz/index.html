@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap"
       rel="stylesheet" />
     
-<!-- BEGIN css/style.css -->
+<!-- BEGIN css/style.css?v=221 -->
 <style>
 * {
   margin: 0;
@@ -3804,7 +3804,7 @@ html {
 }
 
 </style>
-<!-- END css/style.css -->
+<!-- END css/style.css?v=221 -->
 
   </head>
   <body>
@@ -4294,13 +4294,24 @@ html {
 
     <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"></script>
     
-<!-- BEGIN js/core.js -->
+<!-- BEGIN js/core.js?v=221 -->
 <script  defer>
 "use strict";
-/* v2.18 – package version sync: the fix lives in waage.js (balance
-   tilt – the heavier side now sinks). No changes in this file; the
-   bump keeps badge, console lines and ?v= cache tags uniform. */
-console.info("[Feliz] core.js v2.18 · version sync – code as v2.17 (fix in waage.js)");
+/* v2.21 – version sync: client.js is now built on YOUR current file (the
+   new identity-card UI); the math rendering itself is unchanged from
+   v2.20. The ?v=221 tags in index.html guarantee every device runs one
+   coherent set (mixed old/new files were a login-failure cause).
+   v2.20 – MATH RENDERING: LaTeX-lite in questions/answers/info slides
+   is rendered instead of shown as raw text: \frac{3}{4} becomes a real
+   stacked fraction, \sqrt{16} a radical with overbar, ^/_ super/sub-
+   scripts, \times/\cdot/\le/… become real symbols. Delimiters \(…\),
+   \[…\], $…$, $$…$$ and BARE commands anywhere are all picked up.
+   The CSS for the fraction/root look is injected by this file itself –
+   no HTML/CSS edit needed. plainText() turns fractions into "a/b" and
+   roots into "√x", so typed answers still match formatted accepted
+   answers.
+   v2.18/v2.19 (version sync; tilt switch in waage.js) unchanged here. */
+console.info("[Feliz] core.js v2.21 · rich text + math rendering (fractions, roots, symbols)");
 
 /* =============== helpers =============== */
 const $ = (s) => document.querySelector(s);
@@ -4371,19 +4382,348 @@ const RICH_DROP = "div|span|font|a|img|table|tbody|thead|tr|td|th|h[1-6]|blockqu
 const RICH_KEEP_SET = new Set(["b", "i", "u", "s", "br", "p", "li", "ul", "ol", "sub", "sup"]);
 const RICH_OPEN = "^|[\\s(\\[{\"'„“‚‹«>–—-]";
 const RICH_CLOSE = "$|[\\s)\\]}\"'.,;:!?…<>„“‚›»–—-]";
+
+/* ---- v2.20: math (LaTeX-lite) ----------------------------------
+   Runs on the decoded text BEFORE markdown & escaping, so math can
+   never be mangled by the markdown pass. Math runs are pulled out
+   into placeholders (control chars, cannot occur in quiz text), the
+   rest flows through the normal pipeline, and at the very end the
+   placeholders are replaced by SAFE fixed markup: only <sup>/<sub>
+   and <span class="mfrac|mnum|mden|msqrt|mrad|mroot"> built by this
+   code – never anything from the quiz import itself.           */
+const MATH_SYMBOLS = {
+  times: "×", cdot: "·", div: "÷", pm: "±", mp: "∓", le: "≤", leq: "≤", ge: "≥", geq: "≥",
+  ne: "≠", neq: "≠", approx: "≈", equiv: "≡", propto: "∝", infty: "∞",
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", zeta: "ζ", eta: "η", theta: "θ",
+  iota: "ι", kappa: "κ", lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", rho: "ρ", sigma: "σ", tau: "τ",
+  upsilon: "υ", phi: "φ", chi: "χ", psi: "ψ", omega: "ω", pi: "π",
+  Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π", Sigma: "Σ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
+  circ: "°", degree: "°", deg: "°", percent: "%", prime: "′", ast: "*",
+  leftarrow: "←", rightarrow: "→", to: "→", leftrightarrow: "↔", Rightarrow: "⇒", mapsto: "↦",
+  in: "∈", notin: "∉", subset: "⊂", supset: "⊃", subseteq: "⊆", cup: "∪", cap: "∩",
+  emptyset: "∅", varnothing: "∅", forall: "∀", exists: "∃", neg: "¬", land: "∧", lor: "∨",
+  oplus: "⊕", otimes: "⊗", perp: "⊥", parallel: "∥", angle: "∠", triangle: "△",
+  ldots: "…", cdots: "⋯", dots: "…", ell: "ℓ",
+  quad: " ", qquad: "  ", ",": " ", ";": " ", ":": " ", "!": "",
+};
+const MATH_CMD = /^\\([a-zA-Z]+|[,;:!%&#]|\\|\{|\}|\(|\)|\[|\])/;
+function mathEsc(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+/* {…} group with nesting; returns [content, indexAfter] or null */
+function mathGroup(s, i) {
+  if (s[i] !== "{") return null;
+  let d = 0;
+  for (let j = i; j < s.length; j++) {
+    if (s[j] === "{") d++;
+    else if (s[j] === "}") {
+      d--;
+      if (!d) return [s.slice(i + 1, j), j + 1];
+    }
+  }
+  return null;
+}
+/* argument after ^/_ inside math: {…} or a single character */
+function mathArg(s, i) {
+  const g = mathGroup(s, i);
+  if (g) return g;
+  const c = s[i];
+  if (c && /[0-9A-Za-z+\-()]/.test(c)) return [c, i + 1];
+  return null;
+}
+/* render a math payload to safe fixed markup (recursive) */
+function mathHTML(src) {
+  const s = String(src == null ? "" : src);
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "\\") {
+      const cm = MATH_CMD.exec(s.slice(i, i + 34));
+      if (!cm) {
+        out += "\\";
+        i++;
+        continue;
+      }
+      const cmd = cm[1];
+      const j = i + cm[0].length;
+      if (cmd === "\\") {
+        out += "<br>";
+        i = j;
+        continue;
+      }
+      if (cmd === "{" || cmd === "}") {
+        out += cmd;
+        i = j;
+        continue;
+      }
+      if (cmd === "frac" || cmd === "tfrac" || cmd === "dfrac" || cmd === "cfrac") {
+        const a = mathGroup(s, j);
+        const b = a && mathGroup(s, a[1]);
+        if (b) {
+          out += '<span class="mfrac"><span class="mnum">' + mathHTML(a[0]) + '</span><span class="mden">' + mathHTML(b[0]) + "</span></span>";
+          i = b[1];
+          continue;
+        }
+      }
+      if (cmd === "sqrt") {
+        let j2 = j;
+        if (s[j2] === "[") {
+          const k = s.indexOf("]", j2);
+          if (k > j2) j2 = k + 1; /* degree is ignored visually */
+        }
+        const a = mathGroup(s, j2);
+        if (a) {
+          out += '<span class="msqrt"><span class="mrad">√</span><span class="mroot">' + mathHTML(a[0]) + "</span></span>";
+          i = a[1];
+          continue;
+        }
+        out += "√";
+        i = j;
+        continue;
+      }
+      if (cmd === "text" || cmd === "mathrm" || cmd === "mathbf" || cmd === "textbf" || cmd === "textit" || cmd === "operatorname") {
+        const a = mathGroup(s, j);
+        if (a) {
+          out += mathHTML(a[0]);
+          i = a[1];
+          continue;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(MATH_SYMBOLS, cmd)) {
+        out += MATH_SYMBOLS[cmd];
+        i = j;
+        continue;
+      }
+      out += mathEsc(cmd); /* unknown command: lose the backslash, keep the word */
+      i = j;
+      continue;
+    }
+    if (ch === "^" || ch === "_") {
+      const a = mathArg(s, i + 1);
+      if (a) {
+        out += (ch === "^" ? "<sup>" : "<sub>") + mathHTML(a[0]) + (ch === "^" ? "</sup>" : "</sub>");
+        i = a[1];
+        continue;
+      }
+      out += mathEsc(ch);
+      i++;
+      continue;
+    }
+    if (ch === "{") {
+      const g = mathGroup(s, i);
+      if (g) {
+        out += mathHTML(g[0]); /* LaTeX grouping: render the inside */
+        i = g[1];
+        continue;
+      }
+    }
+    if (ch === "}") {
+      out += "}"; /* stray closer: literal */
+      i++;
+      continue;
+    }
+    out += mathEsc(ch);
+    i++;
+  }
+  return out;
+}
+/* walk the whole string: delimited runs + bare commands + ^/_ scripts.
+   Returns { text, store } – text carries placeholders \u0001n\u0002. */
+function mathPass(raw) {
+  const s = String(raw == null ? "" : raw);
+  const store = [];
+  const tok = (payload) => {
+    store.push(mathHTML(payload));
+    return "\u0001" + (store.length - 1) + "\u0002";
+  };
+  const mathy = (x) => /[\\^_{}]/.test(x); /* $…$ only when it smells like math */
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === "\\") {
+      const cm = MATH_CMD.exec(s.slice(i, i + 34));
+      if (!cm) {
+        out += ch;
+        i++;
+        continue;
+      }
+      const cmd = cm[1];
+      const j = i + cm[0].length;
+      if (cmd === "(") {
+        const end = s.indexOf("\\)", j);
+        if (end < 0) {
+          out += "(";
+          i = j;
+          continue;
+        }
+        out += tok(s.slice(j, end));
+        i = end + 2;
+        continue;
+      }
+      if (cmd === "[") {
+        const end = s.indexOf("\\]", j);
+        if (end < 0) {
+          out += "[";
+          i = j;
+          continue;
+        }
+        out += tok(s.slice(j, end));
+        i = end + 2;
+        continue;
+      }
+      if (cmd === ")" || cmd === "]") {
+        out += cmd;
+        i = j;
+        continue;
+      }
+      if (cmd === "frac" || cmd === "tfrac" || cmd === "dfrac" || cmd === "cfrac") {
+        const a = mathGroup(s, j);
+        const b = a && mathGroup(s, a[1]);
+        if (b) {
+          out += tok("\\frac{" + a[0] + "}{" + b[0] + "}");
+          i = b[1];
+          continue;
+        }
+      }
+      if (cmd === "sqrt") {
+        let j2 = j;
+        if (s[j2] === "[") {
+          const k = s.indexOf("]", j2);
+          if (k > j2) j2 = k + 1;
+        }
+        const a = mathGroup(s, j2);
+        if (a) {
+          out += tok("\\sqrt{" + a[0] + "}");
+          i = a[1];
+          continue;
+        }
+      }
+      if (cmd === "text" || cmd === "mathrm" || cmd === "mathbf" || cmd === "textbf" || cmd === "textit" || cmd === "operatorname") {
+        const a = mathGroup(s, j);
+        if (a) {
+          out += mathEsc(a[0]); /* plain words – escaped, no markup needed */
+          i = a[1];
+          continue;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(MATH_SYMBOLS, cmd)) {
+        out += MATH_SYMBOLS[cmd]; /* bare symbol anywhere: inline */
+        i = j;
+        continue;
+      }
+      out += cm[0]; /* unknown command outside math: leave the text as-is */
+      i = j;
+      continue;
+    }
+    if (ch === "$") {
+      if (s[i + 1] === "$") {
+        const end = s.indexOf("$$", i + 2);
+        if (end > i + 1) {
+          out += tok(s.slice(i + 2, end));
+          i = end + 2;
+          continue;
+        }
+      } else {
+        const end = s.indexOf("$", i + 1);
+        if (end > i) {
+          const inner = s.slice(i + 1, end);
+          if (mathy(inner)) {
+            out += tok(inner);
+            i = end + 1;
+            continue;
+          }
+        }
+      }
+      out += ch;
+      i++;
+      continue;
+    }
+    if ((ch === "^" || ch === "_") && /[A-Za-z0-9)\]}]/.test(s[i - 1] || "")) {
+      /* outside math: scripts only in clearly scripted spots – snake_case
+         (file_name) and currency-like text stay untouched            */
+      const g = mathGroup(s, i + 1);
+      if (g) {
+        out += (ch === "^" ? "<sup>" : "<sub>") + mathHTML(g[0]) + (ch === "^" ? "</sup>" : "</sub>");
+        i = g[1];
+        continue;
+      }
+      let j = i + 1;
+      if (ch === "^") {
+        while (j < s.length && /[0-9]/.test(s[j])) j++; /* 2^10 */
+      }
+      if (j === i + 1 && s[j] && /[A-Za-z0-9]/.test(s[j])) j++; /* single char */
+      const after = s[j] || "";
+      if (j > i + 1 && !/[A-Za-z0-9_]/.test(after)) {
+        out += (ch === "^" ? "<sup>" : "<sub>") + mathHTML(s.slice(i + 1, j)) + (ch === "^" ? "</sup>" : "</sub>");
+        i = j;
+        continue;
+      }
+    }
+    out += ch;
+    i++;
+  }
+  return { text: out, store };
+}
+/* the look of fractions & roots – injected once, no CSS file edit needed */
+(function injectMathCSS() {
+  try {
+    if (document.getElementById("felizMathCSS")) return;
+    const st = document.createElement("style");
+    st.id = "felizMathCSS";
+    st.textContent =
+      ".mfrac{display:inline-flex;flex-direction:column;vertical-align:-0.55em;text-align:center;line-height:1.18;margin:0 .14em}" +
+      ".mfrac>span{display:block;padding:0 .22em;font-size:.92em}" +
+      ".mfrac>.mnum{border-bottom:.09em solid currentColor}" +
+      ".msqrt{white-space:nowrap}" +
+      ".msqrt .mrad{display:inline-block;font-size:1.05em;transform:translateY(.02em)}" +
+      ".msqrt .mroot{display:inline-block;border-top:.09em solid currentColor;padding:0 .18em 0 .1em;margin-left:.04em}";
+    (document.head || document.documentElement).appendChild(st);
+  } catch (e) {}
+})();
 function richHTML(str) {
   if (str == null) return "";
   let s = String(str);
   /* 1) decode the entities imports tend to carry (&lt;b&gt; acts like <b>).
         nbsp comes AFTER the &amp; step – double-encoded exports carry
-        "&amp;nbsp;", and only then does the real "&nbsp;" exist.       */
+        "&amp;nbsp;", and only then does the real "&nbsp;" exist.
+        v2.20: numeric code points and common math entities too.        */
   s = s
     .replace(/&lt;|&#60;/gi, "<")
     .replace(/&gt;|&#62;/gi, ">")
     .replace(/&quot;|&#34;/gi, '"')
     .replace(/&apos;|&#39;/gi, "'")
     .replace(/&amp;|&#38;/gi, "&")
-    .replace(/&nbsp;|&#160;/gi, " ");
+    .replace(/&nbsp;|&#160;/gi, " ")
+    .replace(/&frac14;/g, "\u00bc")
+    .replace(/&frac12;/g, "\u00bd")
+    .replace(/&frac34;/g, "\u00be")
+    .replace(/&deg;/g, "\u00b0")
+    .replace(/&sup2;/g, "\u00b2")
+    .replace(/&sup3;/g, "\u00b3")
+    .replace(/&times;/g, "\u00d7")
+    .replace(/&divide;/g, "\u00f7")
+    .replace(/&plusmn;/g, "\u00b1")
+    .replace(/&middot;/g, "\u00b7")
+    .replace(/&#x([0-9a-f]{1,5});/gi, (m, h) => {
+      try {
+        return String.fromCodePoint(parseInt(h, 16));
+      } catch (e) {
+        return m;
+      }
+    })
+    .replace(/&#([0-9]{1,7});/g, (m, d) => {
+      try {
+        return String.fromCodePoint(+d);
+      } catch (e) {
+        return m;
+      }
+    });
+  /* 1b) v2.20: math extraction BEFORE markdown, so LaTeX never gets
+        reformatted; placeholders survive escaping untouched        */
+  const MT = mathPass(s);
+  s = MT.text;
   /* 2) markdown on the raw text – markers that sit directly next to word
         characters are never formatting, so 2*3*4 and file_name stay   */
   s = s.replace(new RegExp("(" + RICH_OPEN + ")\\*\\*([^*\\s][^*\\n]*?)\\*\\*(?=" + RICH_CLOSE + ")", "g"), "$1<b>$2</b>");
@@ -4435,11 +4775,19 @@ function richHTML(str) {
     }
   }
   if (!skip) out += s.slice(idx);
+  /* 5) v2.20: put the rendered math back in – fixed markup from this
+        file only (mfrac/mnum/mden/msqrt/mrad/mroot + sup/sub)        */
+  out = out.replace(/\u0001(\d+)\u0002/g, (m, n) => (MT.store[+n] != null ? MT.store[+n] : ""));
   while (stack.length) out += "</" + stack.pop() + ">";
   return out;
 }
 function plainText(str) {
-  return richHTML(str)
+  let t = richHTML(str);
+  /* v2.20: math back to comparable text – 3/4 for fractions, √16 for
+        roots – so a typed "3/4" matches an accepted "\frac{3}{4}" */
+  t = t.replace(/<span class="mnum">([\s\S]*?)<\/span>\s*<span class="mden">([\s\S]*?)<\/span>/g, "$1/$2");
+  t = t.replace(/<span class="m(?:frac|num|den|sqrt|rad|root)">|<\/span>/g, "");
+  return t
     .replace(/<br\s*\/?>|<\/?(?:b|strong|i|em|u|s|p|li|ul|ol|sub|sup)>/gi, " ")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
@@ -5133,10 +5481,10 @@ function avEl(p) {
 }
 
 </script>
-<!-- END js/core.js -->
+<!-- END js/core.js?v=221 -->
 
     
-<!-- BEGIN js/audio.js -->
+<!-- BEGIN js/audio.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -5250,10 +5598,10 @@ const SFX = (() => {
 ["pointerdown", "keydown"].forEach((ev) => window.addEventListener(ev, () => AudioCore.ensure(), { once: true, capture: true }));
 
 </script>
-<!-- END js/audio.js -->
+<!-- END js/audio.js?v=221 -->
 
     
-<!-- BEGIN js/qr.js -->
+<!-- BEGIN js/qr.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -5504,10 +5852,10 @@ const QR = (() => {
 })();
 
 </script>
-<!-- END js/qr.js -->
+<!-- END js/qr.js?v=221 -->
 
     
-<!-- BEGIN js/import.js -->
+<!-- BEGIN js/import.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -6385,15 +6733,37 @@ async function handleFile(file) {
 }
 
 </script>
-<!-- END js/import.js -->
+<!-- END js/import.js?v=221 -->
 
     
-<!-- BEGIN js/host.js -->
+<!-- BEGIN js/host.js?v=221 -->
 <script  defer>
 "use strict";
-/* v2.18 – package version sync: the fix lives in waage.js (balance
-   tilt – the heavier side now sinks). No changes in this file; the
-   bump keeps badge, console lines and ?v= cache tags uniform.
+/* v2.21 – rejoining in BALANCE mode + the new client UI:
+   • the host used to answer EVERY join during a running balance
+     round with "busy" and cut the connection – including kids whose
+     link had just dropped. They could never get back into their own
+     player (their "Guthaben"). Now: joins with a matching player id
+     (or a matching name, for older devices) REVIVE that player and
+     immediately receive the balance question list. Only genuinely
+     new kids get the "wait for the next round" note, because a fresh
+     glass base would change the team sizes the round started with.
+   • (re)joiners mid-round get "waageStart" re-pushed, so their phone
+     plays along right away instead of sitting on "waiting for the
+     host".
+   • version sync: client.js is now built on YOUR current file (new
+   identity-card UI) – same protocol, id + waage handlers included.
+   v2.20 – two changes on top of v2.19:
+   • "GUTHABEN" LOGIN: joins carry a persistent player id from the
+     device (v2.20 client.js). It is matched FIRST – a returning kid
+     always lands back in their OWN player (score/streak/progress
+     intact), even when the old connection still looks alive or
+     another kid picked the same name. The name is now only the
+     fallback for older clients.
+   • TYPED-ANSWER REVEAL: the correct answer stays 2 seconds longer
+     (5 s instead of 3 s) before the scoreboard takes over.
+   • version sync (math rendering lives in core.js v2.20).
+   v2.19/v2.18 – version sync (tilt switch in waage.js).
    v2.17 · reworks the two screens you reported after the first rollout:
    • TEXT QUESTIONS: show ONLY the correct answer card, with the count
      of correct answers as a small badge in its TOP RIGHT corner –
@@ -6402,7 +6772,7 @@ async function handleFile(file) {
    • PODIUM: order is now Podium → reload note + button → THEN the
      remaining players list (capped to the space left below, "… plus
      N more"). Podium and button are always visible, on any screen.
-   • ON-SCREEN VERSION BADGE (bottom left, "Feliz v2.18"): instantly
+   • ON-SCREEN VERSION BADGE (bottom left, "Feliz v2.20"): instantly
      shows WHICH code the browser is actually running. If it is not
      visible after a reload, the browser is still serving an old
      cached file – hard refresh (Ctrl+F5) and check the upload.
@@ -6422,11 +6792,11 @@ if (typeof setRich !== "function" || typeof plainText !== "function") {
   };
   console.warn("[Feliz] core.js older than host.js – formatting inactive, hard-refresh (Ctrl+F5)");
 }
-console.info("[Feliz] host.js v2.18");
+console.info("[Feliz] host.js v2.21");
 /* v2.17: visible version badge so "old code still served" is provable */
 if (document.body) {
   const badge = document.createElement("div");
-  badge.textContent = "Feliz v2.18";
+  badge.textContent = "Feliz v2.21";
   badge.title = "Zeigt die tatsächlich laufende Version. Fehlt dieses Eckchen nach einem Neuladen, dient der Browser noch eine alte Datei aus dem Cache: hart nachladen (Strg+F5).";
   badge.style.cssText =
     "position:fixed;left:8px;bottom:8px;z-index:99999;opacity:.45;font:11px/1.5 monospace;pointer-events:none";
@@ -6837,6 +7207,23 @@ function handleConn(conn) {
       }
       if (m.t === "join") {
         if (G.started && G.mode === "waage") {
+          /* v2.21: balance mode used to reject EVERY join with "busy" –
+             including kids whose connection had just dropped, who then
+             could never get back into their own player ("Guthaben").
+             Returning players (matching id, or matching name for older
+             devices) are revived now and receive the questions; only
+             genuinely NEW kids get the "next round" message, because a
+             fresh glass base would change the team sizes the round
+             started with.                                              */
+          const rid = typeof m.id === "string" && /^[A-Za-z0-9-]{4,24}$/.test(m.id) ? m.id : null;
+          const rname = String(m.name || "").trim().slice(0, 26);
+          const known = G.players.find(
+            (x) => !x.bot && ((rid && x.pid === rid) || (rname && x.name === rname)),
+          );
+          if (known) {
+            onJoin(conn, m); /* back into their OWN player – the question list follows below */
+            return;
+          }
           conn.send({ t: "busy" });
           setTimeout(() => {
             try {
@@ -6887,22 +7274,32 @@ function onJoin(conn, m) {
   const want = String(m.name || "")
     .trim()
     .slice(0, 26);
-  /* reconnect: revive the player with this name – score is kept.
-     v2.14: the old connection is taken over even if it never noticed
-     it died (ghost). Without this, a returning player appeared twice:
-     once as a "dead" entry and once under a random new name.       */
-  const old = want ? G.players.find((p) => !p.bot && p.name === want) : null;
-  let p;
-  if (old) {
-    if (old.conn && old.conn !== conn) {
+  /* v2.20: players carry a persistent id from their device – matched
+     FIRST. The returning kid always lands back in THEIR OWN player:
+     score, streak and progress survive reloads, connection drops AND
+     name collisions (the v2.14 name takeover used to hijack the first
+     kid when a second one typed the same name). The name remains the
+     fallback for older clients without an id.                        */
+  const myId = typeof m.id === "string" && /^[A-Za-z0-9-]{4,24}$/.test(m.id) ? m.id : null;
+  let p = myId ? G.players.find((x) => !x.bot && x.pid === myId) : null;
+  if (!p) {
+    /* fallback: same name as a dead (or ghost) player – v2.14 revival */
+    p = want ? G.players.find((x) => !x.bot && x.name === want) : null;
+  }
+  if (p) {
+    if (p.conn && p.conn !== conn) {
       try {
-        old.conn.close(); /* fires the guarded close handler above */
+        p.conn.close(); /* fires the guarded close handler above */
       } catch (e) {}
     }
-    p = old;
     p.conn = conn;
     p.alive = true;
     p.answered = null;
+    if (myId) p.pid = myId;
+    /* refresh the look – the kid may have re-picked on their device */
+    if (typeof m.animal === "string" && /^[a-z0-9_-]{1,40}$/i.test(m.animal)) p.animal = m.animal;
+    if (typeof m.color === "string" && COLORS.includes(m.color)) p.color = m.color;
+    if (want && !G.players.some((x) => x !== p && x.alive && x.name === want)) p.name = want;
   } else {
     const taken = new Set(G.players.filter((x) => x.alive).map((x) => x.name));
     let name = want,
@@ -6917,6 +7314,7 @@ function onJoin(conn, m) {
     }
     p = {
       id: "p" + ++seq,
+      pid: myId || "d" + Math.random().toString(36).slice(2, 10),
       conn,
       name,
       animal,
@@ -6952,6 +7350,11 @@ function onJoin(conn, m) {
       media: q.media && q.media.kind === "img" ? { src: q.media.src } : null,
     });
     updateTSub();
+  } else if (G.started && G.state === "waage" && G.quiz && typeof waageQuestionList === "function") {
+    /* v2.21: (re)joiner during balance mode gets the question list at
+       once – their phone plays along immediately instead of sitting
+       on "waiting for the host" until the round ends              */
+    conn.send({ t: "waageStart", questions: waageQuestionList() });
   }
 }
 function renderLobby() {
@@ -7381,7 +7784,9 @@ function endQuestion() {
     });
   renderResults(counts, correctCount);
   SFX.reveal();
-  phase(3000, showScoreboard);
+  /* v2.20: typed-answer questions get 2 seconds longer to read the
+     correct answer before the scoreboard takes over               */
+  phase(G.q && G.q.type === "input" ? 5000 : 3000, showScoreboard);
 }
 function renderResults(counts, correctCount) {
   const q = G.q;
@@ -7726,10 +8131,10 @@ $("#podBtn").addEventListener("click", () => {
 });
 
 </script>
-<!-- END js/host.js -->
+<!-- END js/host.js?v=221 -->
 
     
-<!-- BEGIN js/waage.js -->
+<!-- BEGIN js/waage.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -7743,20 +8148,23 @@ $("#podBtn").addEventListener("click", () => {
    above onto the liquid surface. The first glass to overflow
    wins.                                                 */
 
-/* v2.19: TILT DIRECTION is now ONE switch you can set yourself:
-   WAAGE.tiltSign, a few lines below (in the WAAGE = { … } line).
-     +1  = as delivered (v2.18 behaviour)
-     -1  = inverted – set this if on your screen the side with MORE
-           correct answers still rises instead of sinking
-   The switch drives BOTH the resting tilt AND the little kick when
-   a drop lands. Why a switch at all? The visual direction depends
-   on how your CSS rotates the beam (.wbeam) and offsets the hangers
-   (.whang.hL / .whang.hR) – that part is invisible to the JS, so
-   instead of guessing the sign a third time, you can now simply
-   turn it. If -1 is what works for you, the actual sign bug lives
-   in your CSS – you may fix it there instead (optional).
-   v2.18 flipped the hard-wired sign once (heavier side sinks);
-   v2.19 keeps that as the default and makes it adjustable.
+/* v2.21: the question list for the devices is built by its own
+   function waageQuestionList() – host.js calls it to RE-PUSH the
+   list to (re)joiners mid-round, so a kid whose connection dropped
+   gets the questions back instantly instead of an empty phone
+   until the round ends.                                        */
+
+/* v2.20: DEFAULT DIRECTION RESTORED to the original formula. The
+   beam CSS of this app (style.css, verified against the actual file:
+   .wbeam { transform: rotate(var(--tilt)) } with .whang.hL on the
+   LEFT / .whang.hR on the RIGHT beam end) means a POSITIVE tilt
+   lowers the RIGHT side, a negative tilt the LEFT. Team 0 = left,
+   team 1 = right. So "team 1 fuller → positive" is the physically
+   correct sign – which is exactly the ORIGINAL v2.15 formula that
+   the v2.18 change accidentally inverted. v2.18/v2.19 shipped the
+   inverted default, making the heavier side RISE on this CSS.
+   The WAAGE.tiltSign switch stays: if your LIVE style.css differs
+   from the pasted one, set tiltSign = -1 and the beam flips.
    The win logic (first glass to overflow) is untouched. */
 
 /* v2.16 (UI-fix package): the maximum fill height is
@@ -7771,13 +8179,14 @@ $("#podBtn").addEventListener("click", () => {
    see the round end after barely a minute. The team counters
    now show exact logic units (incl. head start) "x / cap". */
 
-const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100, tiltSign: -1 };
-/*          ▲▲▲ HIER die Neigungsrichtung einstellen ▲▲▲
-   tiltSign:  1 = Standard: die Seite mit MEHR richtigen Antworten
-                  (volleres Glas) sinkt tiefer
-              -1 = umgekehrt – setze -1, wenn bei dir die falsche
-                  Seite sinkt. Wirkt sofort nach dem Neuladen.   */
-console.info("[Feliz] waage.js v2.19 · tilt direction switch: WAAGE.tiltSign = 1 | -1");
+const WAAGE = { teams: [[], []], caps: [10, 10], starts: [0, 0], unit: 10, rim: 100, tiltSign: 1 };
+/*          ▲▲▲ Neigungsrichtung einstellen ▲▲▲
+   tiltSign:  1 = Standard (v2.20): die Seite mit MEHR richtigen
+                  Antworten (volleres Glas) sinkt tiefer – berechnet
+                  für die style.css dieser App
+              -1 = umgekehrt – nur setzen, wenn auf deinem Bildschirm
+                  die falsche Seite sinkt (Live-CSS weicht ab)      */
+console.info("[Feliz] waage.js v2.21 · question list re-pushed to (re)joiners · tilt default: heavier side sinks · switch: WAAGE.tiltSign");
 const WPHYS = { tilt: 0, vel: 0, target: 0, raf: 0, root: null, lastT: 0 };
 const W_BASE = 7; /* px – every player exists as a base layer */
 
@@ -7953,19 +8362,19 @@ function waageWinner() {
   if (oa >= 0 && ob >= 0) return oa >= ob ? 0 : 1;
   return oa >= 0 ? 0 : 1;
 }
-/* v2.19: direction follows WAAGE.tiltSign (see the big arrow at
-   the top of this file). Convention at tiltSign = +1: team 0 =
-   left/red, team 1 = right/blue; the team with more units
-   (heavier glass) gets the tilt that sinks ITS side.          */
+/* v2.20: ORIGINAL sign restored (d = team1 − team0), because the
+   app's CSS lowers the RIGHT side for positive tilt (team 1 =
+   right). tiltSign flips everything if your live CSS differs.  */
 function computeTiltTarget() {
-  const d = (teamFillPxVis(0) - teamFillPxVis(1)) / Math.max(1, WAAGE.rim);
+  const d = (teamFillPxVis(1) - teamFillPxVis(0)) / Math.max(1, WAAGE.rim);
   return (WAAGE.tiltSign || 1) * Math.max(-15, Math.min(15, d * 30));
 }
 
 /* ---- game start: questions go to the devices ---- */
-function startWaageLive() {
-  G.state = "waage";
-  const list = G.quiz.questions.map((q, i) => ({
+/* v2.21: the list builder is its own function – host.js reuses it to
+   re-push the questions to (re)joiners mid-round                    */
+function waageQuestionList() {
+  return G.quiz.questions.map((q, i) => ({
     ri: i,
     text: q.text,
     desc: q.type === "info" ? q.desc || "" : null,
@@ -7974,7 +8383,10 @@ function startWaageLive() {
     type: q.type || null,
     media: q.media && q.media.kind === "img" ? { src: q.media.src } : null,
   }));
-  conns().forEach((c) => c.send({ t: "waageStart", questions: list }));
+}
+function startWaageLive() {
+  G.state = "waage";
+  conns().forEach((c) => c.send({ t: "waageStart", questions: waageQuestionList() }));
   showWaageLive();
   scheduleWaageBots();
   if (waageOver()) setTimeout(waageVictory, 1600);
@@ -8035,7 +8447,7 @@ function waageAddUnit(p) {
     updateScales();
     splash(root, p);
     WPHYS.target = computeTiltTarget();
-    WPHYS.vel += (WAAGE.tiltSign || 1) * (p.team === 0 ? 1 : -1) * 11; /* v2.19: kick toward the scoring side, obeys WAAGE.tiltSign */
+    WPHYS.vel += (WAAGE.tiltSign || 1) * (p.team === 0 ? -1 : 1) * 11; /* v2.20: kick toward the scoring side (team0=left sinks) */
     if (waageOver()) setTimeout(waageVictory, 1100);
   });
 }
@@ -8294,10 +8706,10 @@ function waageVictory() {
 }
 
 </script>
-<!-- END js/waage.js -->
+<!-- END js/waage.js?v=221 -->
 
     
-<!-- BEGIN js/create.js -->
+<!-- BEGIN js/create.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -8624,10 +9036,10 @@ function exportCreateCsv() {
 }
 
 </script>
-<!-- END js/create.js -->
+<!-- END js/create.js?v=221 -->
 
     
-<!-- BEGIN js/library.js -->
+<!-- BEGIN js/library.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -8932,10 +9344,10 @@ function pvQEl(q, idx) {
 }
 
 </script>
-<!-- END js/library.js -->
+<!-- END js/library.js?v=221 -->
 
     
-<!-- BEGIN js/client.js -->
+<!-- BEGIN js/client.js?v=221 -->
 <script  defer>
 "use strict";
 
@@ -9875,10 +10287,10 @@ $("#endBtn").addEventListener("click", () => {
 });
 
 </script>
-<!-- END js/client.js -->
+<!-- END js/client.js?v=221 -->
 
     
-<!-- BEGIN js/main.js -->
+<!-- BEGIN js/main.js?v=221 -->
 <script  defer>
 "use strict";
 /* CDN fallback – school filters sometimes block jsdelivr */
@@ -10074,7 +10486,7 @@ window.addEventListener("keydown", (e) => {
 })();
 
 </script>
-<!-- END js/main.js -->
+<!-- END js/main.js?v=221 -->
 
   </body>
 </html>
