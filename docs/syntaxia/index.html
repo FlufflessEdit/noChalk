@@ -458,11 +458,11 @@ hr.sep{border:none; border-top:2px solid var(--line); margin:10px 0;}
   <div class="menu-stack">
     <button class="btn primary" id="btn-play">Spielen</button>
     <button class="btn" id="btn-optionen-menu">🛠 Einstellungen</button>
-    <button class="btn" id="btn-login">Ich bin Schüler/in – Anmelden</button>
-    <button class="btn gold" id="btn-teacher">Lehrerbereich</button>
+    <button class="btn" id="btn-save" title="Spielstand als Datei herunterladen (Backup oder Wechsel auf einen anderen PC)">💾 Fortschritt speichern</button>
+    <label class="btn" style="position:relative; display:block; text-align:center;" title="Spielstand aus einer Datei laden (z. B. USB-Stick oder Netzlaufwerk)">📂 Fortschritt laden<input type="file" id="btn-load" accept=".json" style="position:absolute; inset:0; opacity:0; cursor:pointer;"></label>
   </div>
   <div id="menu-profile"></div>
-  <div id="menu-foot">Syntaxia v3.0 · läuft komplett offline · Fortschritt wird im Browser gespeichert</div>
+  <div id="menu-foot">Syntaxia v3.2 · läuft komplett offline · Dein Fortschritt wird auf diesem Computer gespeichert</div>
 </div>
 
 <div id="screen-levels" class="screen">
@@ -669,36 +669,6 @@ def gruesse(name):
   </div>
 </div>
 
-<div id="screen-teacher" class="screen">
-  <div class="topbar">
-    <button class="btn small" id="btn-teacher-back" title="Zurück (Esc)">←</button>
-    <h2>Lehrerbereich</h2>
-    <span class="spacer"></span>
-    <button class="btn small danger" id="btn-teacher-logout" style="display:none">Abmelden</button>
-  </div>
-  <div class="tabbar" id="teacher-tabs"></div>
-  <div class="tab" id="tab-konto"></div>
-  <div class="tab" id="tab-kurse"></div>
-  <div class="tab" id="tab-progress"></div>
-  <div class="tab" id="tab-loesungen"></div>
-  <div class="tab" id="tab-maschinen"></div>
-  <div class="tab" id="tab-daten"></div>
-</div>
-
-<div id="screen-login" class="screen">
-  <div class="topbar"><button class="btn small" id="btn-login-back" title="Zurück (Esc)">←</button><h2>Schüler-Anmeldung</h2></div>
-  <div style="flex:1; display:flex; align-items:center; justify-content:center;">
-    <div class="panel" style="width:360px; display:flex; flex-direction:column; gap:10px;">
-      <div id="login-msg" class="hint"></div>
-      <label>Benutzername<br><input type="text" id="login-name" style="width:100%"></label>
-      <label>Passwort<br><input type="password" id="login-pass" style="width:100%"></label>
-      <button class="btn primary" id="btn-login-go">Anmelden</button>
-      <hr class="sep">
-      <button class="btn" id="btn-login-guest">Ohne Anmeldung spielen (Gast)</button>
-    </div>
-  </div>
-</div>
-
 <div id="toast"></div>
 <div id="item-tip"></div>
 <div id="modal-root"><div class="modal panel" id="modal-box"></div></div>
@@ -760,6 +730,9 @@ const U = {
     }
     return 'h' + U.fnv1a(h).toString(36) + U.fnv1a(h + h).toString(36);
   },
+
+  // Datei-/Key-sichere Kurzform: Punkte, Leerzeichen u.a. werden ersetzt
+  fbKey(s){ return String(s || '').toLowerCase().replace(/[.#$/\[\]]/g, '').replace(/\s+/g, '_').slice(0, 60); },
 
   lsGet(key, fallback){
     try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); }
@@ -3916,7 +3889,7 @@ function baumVariant(x, y){
 // Deckkraft ließen nur ~34 % hindurch, à 0.55 nur ~9 % – Felder hinter
 // Bäumen wären unzählbar, und genau das braucht das Programmieren
 // (Route planen = Felder zählen).
-const LAUB_ALPHA = 0.5;
+const LAUB_ALPHA = 0.30;
 const KEINE_LAUB = [];   // gemeinsames leeres Feld (keine Bäume = kein Laub)
 
 class World {
@@ -15620,15 +15593,12 @@ const Game = {
   },
 
   /* Sichtbarkeit des !-Buttons (Musterlösung) – wird auch laufend geprüft,
-     damit eine Freigabe/Entzug der Lehrkraft sofort wirkt. */
+     damit eine Freigabe (versteckt in den Einstellungen) sofort wirkt. */
   syncLoesungBtn(){
     const b = U.$('#btn-lösung');
     if (!b) return;
-    const frei = App.darfLoesung();
-    b.style.display = frei ? '' : 'none';
-    const lehrer = !!(App.teacherData && App.teacherData.loggedIn);
-    b.title = lehrer ? 'Musterlösung anzeigen (Lehrerbereich)'
-      : 'Musterlösung – von deiner Lehrkraft freigegeben';
+    b.style.display = App.darfLoesung() ? '' : 'none';
+    b.title = 'Musterlösung anzeigen';
   },
 
   /* Zeilen zählen: Leerzeilen & reine Kommentarzeilen zählen nicht.
@@ -16896,12 +16866,11 @@ const Game = {
         App.toast('Die Musterlösung ist gesperrt. Deine Lehrkraft kann sie für dich freischalten.', 'err');
         return;
       }
-      const lehrer = !!(App.teacherData && App.teacherData.loggedIn);
       const sol = typeof this.level.loesung === 'string' ? this.level.loesung : (this.level.loesung || '').toString();
       if (!sol || sol.startsWith('Maschinen-Code')){ App.toast('Für dieses Level gibt es keine textliche Musterlösung (siehe Anleitung).', 'sys'); return; }
       App.modal({
-        title: lehrer ? 'Musterlösung (nur für Lehrkräfte)' : 'Musterlösung (freigegeben)',
-        body: '<div class="mbody hint">' + (lehrer ? 'Zum Vergleichen und für die Unterrichtsvorbereitung:' : 'Von deiner Lehrkraft freigegeben – schau genau, wie sie funktioniert:') + '</div><pre>' + U.escapeHtml(sol) + '</pre>',
+        title: 'Musterlösung (freigegeben)',
+        body: '<div class="mbody hint">Freigegeben in den Einstellungen – schau genau, wie sie funktioniert:</div><pre>' + U.escapeHtml(sol) + '</pre>',
         buttons: [
           {label:'Schließen', fn:()=>{}},
           {label:'In Editor übernehmen', primary:true, fn:()=>{
@@ -18525,415 +18494,6 @@ const Glossar = {
 };
 
 
-/* ================= 12_teacher.js ================= */
-/* ============ 12: Lehrerbereich & Schüler-Login ============ */
-const Teacher = {
-  tab: 'konto',
-
-  data(){ return App.teacherData; },
-
-  open(){
-    App.showScreen('teacher');
-    this.render();
-  },
-
-  render(){
-    const d = this.data();
-    const logged = !!(d && d.loggedIn);
-    if (d && !d.loesungFrei) d.loesungFrei = {};      // Migration älterer Daten
-    U.$('#btn-teacher-logout').style.display = logged ? '' : 'none';
-    const tabs = [['konto','Konto'], ['kurse','Kurse & Schüler'], ['progress','Fortschritt'], ['loesungen','Musterlösungen'], ['maschinen','Maschinen-Lösungen'], ['daten','Daten (Sicherung)']];
-    const bar = U.$('#teacher-tabs');
-    bar.innerHTML = '';
-    for (const [id, label] of tabs){
-      const b = U.el('button', 'btn small' + (this.tab === id ? ' on' : ''), label);
-      b.onclick = ()=>{ SFX.click(); this.tab = id; this.render(); };
-      bar.appendChild(b);
-    }
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-    U.$('#tab-' + this.tab).classList.add('on');
-    if (this.tab === 'konto') this.renderKonto();
-    if (this.tab === 'kurse') this.renderKurse();
-    if (this.tab === 'progress') this.renderProgress();
-    if (this.tab === 'loesungen') this.renderLoesungen();
-    if (this.tab === 'maschinen') this.renderMaschinen();
-    if (this.tab === 'daten') this.renderDaten();
-  },
-
-  /* Vorschlagslösungen für Maschinen (Ofen, Werkbank, Fabrik, Bienenstock …)
-     und für die Maschinen-Aufgaben der Dorfbewohner. */
-  renderMaschinen(){
-    const box = U.$('#tab-maschinen');
-    const d = this.data();
-    if (!d || !d.loggedIn){ box.innerHTML = '<div class="hint">Zuerst im Tab "Konto" anmelden.</div>'; return; }
-    const villagerLoesungen = [
-      {wer: 'Bauer Bruno – Farmautomatik (Tech: Farmautomatik)',
-       aufgabe: 'Eine Maschine, deren Code pflanze_hier() UND ernte_hier() benutzt.',
-       code: 'while True:\n    feld = was_ist_hier()\n    if feld == \'ackerboden\':\n        pflanze_hier()\n    elif feld == \'weizen_reif\':\n        ernte_hier()\n    warte(0.5)\n\n# Variante mit Bewegung: die Maschine läuft den Acker entlang:\n# for i in range(4):\n#     gehe_vorwärts()\n#     pflanze_hier()'},
-      {wer: 'Schmiedin Stella – Sortiererin (Tech: Sortiertechnik)',
-       aufgabe: 'Die chaotische Kiste in Fächer einsortieren (edel / allgemein / essen …).',
-       code: 'while True:\n    for item in kiste_items():\n        if item["fach"] is None:\n            if "edel" in item["tags"]:\n                sortiere_item(item["id"], "edel")\n            elif "essen" in item["tags"]:\n                sortiere_item(item["id"], "essen")\n            else:\n                sortiere_item(item["id"], "allgemein")\n    warte(1)\n'},
-      {wer: 'Erfinderin Ede – Bergbau-Roboter (Tech: Baumaschine)',
-       aufgabe: 'Eine Maschine, deren Code abbaue_hier() benutzt und die sich bewegt.',
-       code: 'while True:\n    vor = was_ist_vor_mir()\n    if vor == \'wand\':\n        drehe_rechts()\n    else:\n        gehe_vorwärts()\n    if was_ist_hier() in (\'erz_kohle\', \'erz_eisen\', \'erz_gold\', \'erz_diamant\'):\n        abbaue_hier()\n    warte(0.4)\n'}
-    ];
-    let html = '<div class="panel" style="max-width:1000px;"><h3>Vorschlagslösungen für Maschinen</h3>' +
-      '<p class="hint" style="margin:6px 0;">Diese Maschinen stehen Schüler/innen als <b>Vorlagen</b> zur Verfügung (Maschinen-Übersicht → "Aus Vorlage"). ' +
-      'Die Codes kannst du hier vergleichen oder im Unterricht besprechen.</p>';
-    for (const v of MACH_VORLAGEN){
-      html += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--green);">' + v.icon + ' ' + U.escapeHtml(v.name) + '</h4>' +
-        '<div class="hint" style="margin:4px 0;">' + U.escapeHtml(v.beschreibung) + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
-    }
-    html += '<h3 style="margin-top:22px;">Maschinen der Dorfbewohner – Vorschlagslösungen</h3>';
-    for (const v of villagerLoesungen){
-      html += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(v.wer) + '</h4>' +
-        '<div class="hint" style="margin:4px 0;">' + v.aufgabe + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
-    }
-    html += '<h3 style="margin-top:22px;">Maschinen-Level – echte Musterlösungen</h3>' +
-      '<p class="hint" style="margin:6px 0;">Vier Level drehen sich um Maschinen. Hier die vollständigen, erprobten Lösungen (auch im Level über den <b>!</b>-Knopf sichtbar, wenn du als Lehrkraft angemeldet bist):</p>';
-    const levelLsg = [
-      {lv: 'l7', name: 'Kapitel 8: Maschinen-Werkstatt'},
-      {lv: 'l7f', name: 'Kapitel 7: Die Feldkante (Reihen-Schlangenlinien)'},
-      {lv: 'l7g', name: 'Kapitel 7: Zwei Wiesen, ein Code'},
-      {lv: 'l7a', name: 'Kapitel 8: Doppelte Fenster'},
-      {lv: 'l7b', name: 'Kapitel 8: Die Kettenreaktion'}
-    ];
-    for (const {lv, name} of levelLsg){
-      const L = (typeof LEVELS !== 'undefined') ? LEVELS.find(x => x.id === lv) : null;
-      if (!L || !L.loesung) continue;
-      html += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(name) + '</h4><pre>' + U.escapeHtml(L.loesung) + '</pre></div>';
-    }
-    html += '<div class="panel" style="margin-top:14px;"><h3>Eigenbau-Farm &amp; Logikschaltung (offene Welt)</h3>' +
-      '<div class="hint" style="margin:4px 0;">Die Weizenfarm am Start steht <b>nicht mehr fertig</b> – Schüler/innen bauen sie als Brunos erste Aufgabe SELBST: 🚜 Harke wählen und Rechtsklick pflügt, 🌱 Samen wählen und Rechtsklick sät, ohne Werkzeug wird geerntet &amp; gesammelt. Umrandung &amp; Wasser sind KEINE Pflicht mehr – wer mag, bewässert als Extra (🪣 Eimer wählen, Rechtsklick ins Wasser, dann Rechtsklick aufs Feld); Weizen neben Wasser wächst schneller. ' +
-      'Die vollautomatische Variante folgt danach: Beobachter + Kabel → Tore → Wasser spült zu den Trichtern → Ernte-Kiste; die <b>Sähmaschine</b> säht neu, die <b>Pumpe</b> holt das Wasser zurück, der <b>Sortier-Meister</b> ordnet die Kiste (Körner → "saat", Stroh → "stroh", Weizen → "essen").</div></div>';
-    html += '</div>';
-    box.innerHTML = html;
-  },
-
-  renderKonto(){
-    const box = U.$('#tab-konto');
-    const d = this.data();
-    if (!d || !d.loggedIn){
-      box.innerHTML = '<div class="panel" style="max-width:480px;">' +
-        '<h3>Lehrerkonto einrichten</h3>' +
-        '<p class="hint" style="margin:8px 0;">Alle Daten bleiben auf diesem Computer gespeichert (kein Internet nötig). ' +
-        'Im Lehrerbereich erstellst du Kurse, vergibst Zugangsdaten für Schülerinnen ohne E-Mail und siehst den Fortschritt.</p>' +
-        '<div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;">' +
-        '<input type="email" id="t-email" placeholder="Deine E-Mail (nur als Login-Name)">' +
-        '<input type="password" id="t-pass" placeholder="Passwort (min. 6 Zeichen)">' +
-        '<input type="password" id="t-pass2" placeholder="Passwort wiederholen">' +
-        '<button class="btn primary" id="t-register">Lehrerkonto erstellen / anmelden</button>' +
-        (d && d.email ? '<div class="hint">Es existiert schon ein Konto für <b>' + U.escapeHtml(d.email) + '</b>. Melde dich mit dem Passwort an.</div>' : '') +
-        '</div></div>';
-      U.$('#t-register').onclick = ()=>{
-        const email = U.$('#t-email').value.trim().toLowerCase();
-        const pw = U.$('#t-pass').value;
-        const pw2 = U.$('#t-pass2').value;
-        if (!email || !pw){ App.toast('E-Mail und Passwort ausfüllen.', 'err'); return; }
-        if (pw.length < 6){ App.toast('Passwort zu kurz (min. 6 Zeichen).', 'err'); return; }
-        if (pw !== pw2){ App.toast('Die Passwörter stimmen nicht überein.', 'err'); return; }
-        if (d && d.email && d.email !== email){ App.toast('Es existiert bereits ein Konto mit anderer E-Mail.', 'err'); return; }
-        if (d && d.email){
-          const hash = U.hashPassword(pw, d.salt);
-          if (hash !== d.passHash){ App.toast('Falsches Passwort.', 'err'); return; }
-        }
-        const salt = (d && d.salt) ? d.salt : U.newSalt();
-        App.teacherData = {
-          loggedIn: true, email, salt,
-          passHash: d && d.passHash ? d.passHash : U.hashPassword(pw, salt),
-          kurse: d && d.kurse ? d.kurse : [],
-          loesungFrei: d && d.loesungFrei ? d.loesungFrei : {}
-        };
-        App.saveTeacher();
-        App.toast('Willkommen im Lehrerbereich!', 'ok');
-        this.tab = 'kurse';
-        this.render();
-      };
-    } else {
-      box.innerHTML = '<div class="panel" style="max-width:520px;">' +
-        '<h3>Angemeldet als</h3><p style="margin:8px 0;"><b>' + U.escapeHtml(d.email) + '</b></p>' +
-        '<p class="hint">Kurse: ' + d.kurse.length + ' · Schülerinnen: ' +
-        d.kurse.reduce((n, k)=> n + k.schueler.length, 0) + '</p>' +
-        '<div style="margin-top:12px; padding:10px; border:1px solid var(--line); border-radius:8px;">' +
-        '<label style="display:flex; gap:8px; align-items:center; cursor:pointer;">' +
-        '<input type="checkbox" id="t-alle-level"' + (d.alleLevelFrei ? ' checked' : '') + '>' +
-        '<span><b>Alle Level freischalten</b></span></label>' +
-        '<div class="hint" style="margin-top:6px;">Wenn aktiv, sehen Schüler/innen und Gäste <b>alle Level</b> auf der Weltkarte – auch wenn die vorherigen noch nicht geschafft sind. Praktisch für Werkstatt-Tage oder wenn eine Gruppe direkt bei einem Thema einsteigen soll. Die Musterlösungen bleiben davon unberührt (weiterhin nur mit "Lösung frei?").</div>' +
-        '</div>' +
-        '<p class="hint" style="margin-top:8px;">Tipp: Daten unter "Sicherung" regelmäßig exportieren – der Browser-Speicher kann gelöscht werden.</p></div>';
-      U.$('#t-alle-level').onchange = (e)=>{
-        d.alleLevelFrei = e.target.checked;
-        App.saveTeacher();
-        App.toast(e.target.checked ? 'Alle Level sind jetzt freigeschaltet (gilt für die Weltkarte).' : 'Level-Sperre wieder aktiv: erst schafften, dann das nächste Level.', 'sys');
-      };
-    }
-  },
-
-  renderKurse(){
-    const box = U.$('#tab-kurse');
-    const d = this.data();
-    if (!d || !d.loggedIn){ box.innerHTML = '<div class="hint">Zuerst im Tab "Konto" anmelden.</div>'; return; }
-    box.innerHTML = '';
-    // Kurs anlegen
-    const cp = U.el('div', 'panel');
-    cp.style.maxWidth = '640px';
-    cp.innerHTML = '<h3>Neuen Kurs anlegen</h3><div style="display:flex; gap:8px; margin-top:8px;">' +
-      '<input type="text" id="c-name" placeholder="Kursname, z.B. 6a Informatik" style="flex:1">' +
-      '<button class="btn primary" id="c-add">Anlegen</button></div>';
-    U.$('#c-add', null); // noop
-    cp.querySelector('#c-add').onclick = ()=>{
-      const name = cp.querySelector('#c-name').value.trim();
-      if (!name){ App.toast('Kursnamen eingeben.', 'err'); return; }
-      d.kurse.push({name, schueler: []});
-      App.saveTeacher();
-      App.toast('Kurs "' + name + '" angelegt.', 'ok');
-      this.render();
-    };
-    box.appendChild(cp);
-
-    for (const kurs of d.kurse){
-      const kp = U.el('div', 'panel');
-      kp.style.cssText = 'max-width:900px; margin-top:14px;';
-      kp.innerHTML = '<h3>' + U.escapeHtml(kurs.name) + ' <span class="hint">(' + kurs.schueler.length + ' Schülerinnen)</span></h3>';
-      // Schüler hinzufügen
-      const addRow = U.el('div', '', '');
-      addRow.style.cssText = 'display:flex; gap:8px; margin:10px 0; flex-wrap:wrap;';
-      addRow.innerHTML = '<textarea id="st-names" rows="2" placeholder="Namen (einer pro Zeile oder mit Komma)" style="flex:2; min-width:220px;"></textarea>' +
-        '<div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:6px;">' +
-        '<input type="text" id="st-pw" placeholder="Passwort für alle (leer = automatisch)">' +
-        '<button class="btn primary small" id="st-add">Schülerinnen hinzufügen</button></div>';
-      kp.appendChild(addRow);
-      addRow.querySelector('#st-add').onclick = ()=>{
-        const raw = addRow.querySelector('#st-names').value;
-        const pw = addRow.querySelector('#st-pw').value.trim();
-        const names = raw.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
-        if (!names.length){ App.toast('Namen eingeben.', 'err'); return; }
-        const added = [];
-        for (let name of names){
-          name = name.toLowerCase().replace(/[^a-z0-9äöüß_\-\.]/g, '').slice(0, 20);
-          if (!name) continue;
-          if (kurs.schueler.some(s => s.name === name)){ App.toast('"' + name + '" existiert schon.', 'warn'); continue; }
-          if (d.kurse.some(k => k !== kurs && k.schueler.some(s => s.name === name))){ App.toast('"' + name + '" gibt es in einem anderen Kurs schon.', 'warn'); continue; }
-          const password = pw || ('block-' + U.randInt(100, 999));
-          const salt = U.newSalt();
-          kurs.schueler.push({name, salt, passHash: U.hashPassword(password, salt), pwPlain: password});
-          added.push(name + ' → ' + password);
-        }
-        App.saveTeacher();
-        if (added.length) App.toast(added.length + ' Schülerin(nen) angelegt. Zugangsdaten unten kopieren!', 'ok');
-        this.render();
-      };
-      // Tabelle
-      const table = U.el('table', 'data');
-      table.innerHTML = '<tr><th>Benutzername</th><th>Passwort</th><th>Fortschritt</th><th title="Musterlösungen für diese Schülerin freigeben">Lösung frei?</th><th>Aktionen</th></tr>';
-      if (!kurs.schueler.length){
-        table.innerHTML += '<tr><td colspan="5" class="hint">Noch keine Schülerinnen.</td></tr>';
-      }
-      for (const s of kurs.schueler){
-        const prof = App.profiles['s:' + s.name];
-        const stars = prof ? Object.values(prof.levelStatus).filter(x => x.done).reduce((n, x)=> n + (x.stars || 1), 0) : 0;
-        const frei = !!(d.loesungFrei[kurs.name] && d.loesungFrei[kurs.name][s.name]);
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td><b>' + U.escapeHtml(s.name) + '</b></td><td>' + U.escapeHtml(s.pwPlain || '(gesetzt)') + '</td>' +
-          '<td>' + stars + ' ★</td>' +
-          '<td style="text-align:center;"><label style="cursor:pointer; display:inline-flex; gap:5px; align-items:center;">' +
-          '<input type="checkbox" data-a="loesung"' + (frei ? ' checked' : '') + '> <span class="hint">!</span></label></td>' +
-          '<td><button class="btn small" data-a="pw">Neues Passwort</button> <button class="btn small danger" data-a="del">Entfernen</button></td>';
-        tr.querySelector('[data-a="loesung"]').onchange = (e)=>{
-          if (!d.loesungFrei[kurs.name]) d.loesungFrei[kurs.name] = {};
-          if (e.target.checked){
-            d.loesungFrei[kurs.name][s.name] = true;
-            App.toast('Musterlösungen für "' + s.name + '" freigegeben – das !-Symbol erscheint jetzt im Level.', 'ok');
-          } else {
-            delete d.loesungFrei[kurs.name][s.name];
-            App.toast('Freigabe für "' + s.name + '" entzogen.', 'sys');
-          }
-          App.saveTeacher();
-        };
-        tr.querySelector('[data-a="pw"]').onclick = ()=>{
-          const np = 'block-' + U.randInt(100, 999);
-          s.salt = U.newSalt();
-          s.passHash = U.hashPassword(np, s.salt);
-          s.pwPlain = np;
-          App.saveTeacher();
-          App.toast('Neues Passwort für ' + s.name + ': ' + np, 'gold');
-          this.render();
-        };
-        tr.querySelector('[data-a="del"]').onclick = ()=>{
-          App.confirm('Schülerin entfernen?', 'Der Fortschritt von "' + s.name + '" bleibt erhalten, aber der Login wird gelöscht.', ()=>{
-            kurs.schueler = kurs.schueler.filter(x => x !== s);
-            App.saveTeacher();
-            this.render();
-          });
-        };
-        table.appendChild(tr);
-      }
-      kp.appendChild(table);
-      const foot = U.el('div', '', '');
-      foot.style.cssText = 'display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;';
-      const copyBtn = U.el('button', 'btn small', 'Zugangsdaten kopieren');
-      copyBtn.onclick = ()=>{
-        const txt = kurs.schueler.map(s => s.name + ' | ' + (s.pwPlain || '(gesetzt)')).join('\n');
-        U.copyText(txt, ()=> App.toast('Zugangsdaten kopiert.', 'ok'));
-      };
-      const delKurs = U.el('button', 'btn small danger', 'Kurs löschen');
-      delKurs.onclick = ()=> App.confirm('Kurs löschen?', 'Kurs "' + kurs.name + '" wird samt Zugängen gelöscht (Fortschritte bleiben).', ()=>{
-        d.kurse = d.kurse.filter(k => k !== kurs);
-        App.saveTeacher();
-        this.render();
-      });
-      foot.appendChild(copyBtn); foot.appendChild(delKurs);
-      kp.appendChild(foot);
-      box.appendChild(kp);
-    }
-  },
-
-  renderProgress(){
-    const box = U.$('#tab-progress');
-    const d = this.data();
-    if (!d || !d.loggedIn){ box.innerHTML = '<div class="hint">Zuerst im Tab "Konto" anmelden.</div>'; return; }
-    box.innerHTML = '<div class="panel" style="max-width:1000px;"><h3>Fortschritt aller Schülerinnen</h3>';
-    const schueler = [];
-    for (const k of d.kurse) for (const s of k.schueler) schueler.push({kurs: k.name, name: s.name});
-    if (!schueler.length){ box.innerHTML += '<p class="hint">Noch keine Schülerinnen angelegt.</p></div>'; return; }
-    const table = U.el('table', 'data');
-    table.style.marginTop = '10px';
-    let head = '<tr><th>Schülerin</th><th>Kurs</th>';
-    for (const l of LEVELS) head += '<th style="text-align:center;">' + l.kapitel + '.' + (levelIndex(l.id) + 1) + '<br><span style="font-weight:normal; font-size:10px;">' + l.titel + '</span></th>';
-    table.innerHTML = head + '</tr>';
-    // Level-Zellen mit gespeichertem Code merken (klickbar → Code-Ansicht)
-    const klicks = [];
-    for (const s of schueler){
-      const prof = App.profiles['s:' + s.name];
-      let row = '<tr><td><b>' + U.escapeHtml(s.name) + '</b></td><td class="hint">' + U.escapeHtml(s.kurs) + '</td>';
-      for (const l of LEVELS){
-        const st = prof ? prof.levelStatus[l.id] : null;
-        const hatCode = !!(st && typeof st.code === 'string' && st.code.trim() !== '');
-        if (st && st.done){
-          row += '<td style="text-align:center;" class="stars-cell' + (hatCode ? ' klick-zelle' : '') + '" data-s="' + U.escapeHtml(s.name) + '" data-l="' + l.id + '" title="' +
-            (hatCode ? 'Code der Schülerin ansehen' : 'Geschafft – kein Code gespeichert') + '">' +
-            '★'.repeat(st.stars || 1) + '☆'.repeat(2 - (st.stars || 1)) + '</td>';
-        } else if (hatCode){
-          row += '<td style="text-align:center;" class="hint klick-zelle" data-s="' + U.escapeHtml(s.name) + '" data-l="' + l.id + '" title="Begonnenen Code ansehen">✎</td>';
-        } else {
-          row += '<td style="text-align:center;" class="hint">–</td>';
-        }
-        if (st && hatCode) klicks.push({name: s.name, id: l.id});
-      }
-      row += '</tr>';
-      table.innerHTML += row;
-    }
-    box.appendChild(table);
-    box.appendChild(U.el('p', 'hint', '★ = geschafft · ★★ = Bonus oder Musterlösungs-Kürze · Zelle mit ★ oder ✎ ANKLICKEN = den Code zeigen, den die Schülerin in diesem Level geschrieben hat · – = noch offen.'));
-    box.innerHTML += '</div>';
-    // Klick auf eine Level-Zelle → gespeicherten Code anzeigen
-    // (WICHTIG: erst NACH dem innerHTML+='…' – das klonet die Tabelle und würde
-    //  sonst die gerade angehängten Handler wieder wegwerfen!)
-    document.querySelectorAll('#tab-progress .klick-zelle').forEach(cell => {
-      cell.onclick = ()=>{
-        const name = cell.getAttribute('data-s');
-        const id = cell.getAttribute('data-l');
-        const prof = App.profiles['s:' + name];
-        const st = prof && prof.levelStatus[id];
-        const lvl = levelById(id);
-        if (!st || !lvl) return;
-        const zeilen = (st.code || '').split('\n').filter(l2 => { const t2 = l2.trim(); return t2 && !t2.startsWith('#'); }).length;
-        App.modal({
-          title: 'Code von ' + name + ' – ' + lvl.kapitel + ' · ' + lvl.titel,
-          body: '<div class="mbody hint">' + (st.done ? 'Level geschafft' : 'begonnen (noch nicht geschafft)') +
-            ' · ' + zeilen + ' Code-Zeilen' +
-            (st.bestZeilen !== undefined ? ' · beste Leistung: ' + st.bestZeilen + ' Zeilen' : '') +
-            (st.stars ? ' · ' + '★'.repeat(st.stars) : '') +
-            (st.bonus ? ' · Bonus ✔' : '') + '</div>' +
-            '<pre>' + U.escapeHtml(st.code || '') + '</pre>' +
-            '<div style="display:flex; gap:8px; margin-top:10px;">' +
-            '<button class="btn small" id="btn-code-copy">In Zwischenablage kopieren</button></div>',
-          buttons: [{label:'Schließen', fn:()=>{}}]
-        });
-        U.$('#btn-code-copy').onclick = ()=> U.copyText(st.code || '', ()=> App.toast('Code kopiert.', 'ok'));
-      };
-    });
-  },
-
-  // Alle Musterlösungen auf einen Blick – NUR für angemeldete Lehrkräfte sichtbar.
-  // Freigaben: pro Schülerin im Tab "Kurse & Schüler" (Spalte "Lösung frei?").
-  renderLoesungen(){
-    const box = U.$('#tab-loesungen');
-    const d = this.data();
-    if (!d || !d.loggedIn){ box.innerHTML = '<div class="hint">Zuerst im Tab "Konto" anmelden.</div>'; return; }
-    const freiList = [];
-    for (const k of d.kurse) for (const s of k.schueler)
-      if (d.loesungFrei && d.loesungFrei[k.name] && d.loesungFrei[k.name][s.name]) freiList.push(s.name + ' (' + k.name + ')');
-    box.innerHTML = '<div class="panel" style="max-width:1000px;"><h3>Musterlösungen aller Level</h3>' +
-      '<p class="hint" style="margin:6px 0;">Nur für dich sichtbar. Schüler/innen sehen standardmäßig <b>niemals</b> die Lösungen – ' +
-      'erst wenn du sie im Tab <b>„Kurse &amp; Schüler"</b> (Spalte „Lösung frei?") freigibst, erscheint für sie das !-Symbol im Level.</p>' +
-      '<p style="margin:6px 0;">Aktuell freigegeben für: ' + (freiList.length ? '<b>' + freiList.map(U.escapeHtml).join(', ') + '</b>' : '<span class="hint">niemanden</span>') + '</p>';
-    for (const lvl of LEVELS){
-      const p = U.el('div', 'panel');
-      p.style.cssText = 'margin-top:12px;';
-      let inner = '<h4 style="color:var(--green);">' + lvl.kapitel + ' · ' + U.escapeHtml(lvl.titel) + '</h4>';
-      if (lvl.hinweise && lvl.hinweise.length){
-        inner += '<div class="hint" style="margin:4px 0;">Hilfe-Stufen: ' + lvl.hinweise.length + '</div>';
-      }
-      if (typeof lvl.loesung === 'string' && lvl.loesung && !lvl.loesung.startsWith('Maschinen-Code')){
-        inner += '<pre>' + U.escapeHtml(lvl.loesung) + '</pre>';
-      } else {
-        inner += '<div class="hint">Musterlösung steht in der Anleitung des Levels (z.B. Maschinen-Code).</div>';
-      }
-      p.innerHTML = inner;
-      box.appendChild(p);
-    }
-    box.innerHTML += '</div>';
-  },
-
-  renderDaten(){
-    const box = U.$('#tab-daten');
-    box.innerHTML = '<div class="panel" style="max-width:560px;">' +
-      '<h3>Daten sichern & übertragen</h3>' +
-      '<p class="hint" style="margin:8px 0;">Exportiert Kurse, Zugangsdaten und ALLE Schüler-Fortschritte als JSON-Datei. ' +
-      'Ideal für: Wechsel auf einen anderen Rechner, Sicherungskopie vor Browser-Reset.</p>' +
-      '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
-      '<button class="btn primary" id="d-export">Exportieren (Datei speichern)</button>' +
-      '<label class="btn" style="position:relative;">Importieren<input type="file" id="d-import" accept=".json" style="position:absolute; inset:0; opacity:0; cursor:pointer;"></label>' +
-      '<button class="btn danger" id="d-wipe">Alles löschen</button>' +
-      '</div></div>';
-    U.$('#d-export').onclick = ()=>{
-      const payload = {version: 2, exported: new Date().toISOString(), teacher: App.teacherData, profiles: App.profiles};
-      U.download('syntaxia-daten.json', JSON.stringify(payload, null, 2));
-      App.toast('Datei gespeichert.', 'ok');
-    };
-    U.$('#d-import').onchange = (e)=>{
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        try {
-          const data = JSON.parse(reader.result);
-          if (!data.profiles && !data.teacher) throw new Error('keine Syntaxia-Daten');
-          App.confirm('Daten importieren?', 'Vorhandene Kurse und Fortschritte werden überschrieben!', ()=>{
-            if (data.teacher) App.teacherData = data.teacher;
-            if (data.profiles) App.profiles = data.profiles;
-            App.saveTeacher(); App.saveAllProfiles();
-            App.toast('Import erfolgreich!', 'ok');
-            this.render();
-          });
-        } catch (err){ App.toast('Import fehlgeschlagen: ' + err.message, 'err'); }
-      };
-      reader.readAsText(file);
-    };
-    U.$('#d-wipe').onclick = ()=>{
-      App.confirm('ALLES löschen?', 'Kurse, Zugangsdaten und alle Fortschritte werden unwiderruflich gelöscht!', ()=>{
-        App.teacherData = null;
-        App.profiles = {gast: App.newProfile('Gast', 'gast')};
-        App.saveTeacher(); App.saveAllProfiles();
-        App.toast('Alles gelöscht.', 'ok');
-        this.render();
-      });
-    };
-  }
-};
-
-
 /* ================= 14_systeme.js ================= */
 /* ============ 14: Systeme – Definitionen, Zeit-Tool, Farm-Simulation, Vorlagen ============ */
 
@@ -19874,9 +19434,12 @@ const KAPITEL_TITEL = {
   10: 'Sortieren, Bergbau & 3D-Druck'
 };
 const App = {
-  profile: null, profileKey: 'gast',
+  profile: null, profileKey: 'local',
   profiles: {},
-  teacherData: null,
+  // Lehrkraft-Schalter – gelten nur auf DIESEM Computer und werden nicht in
+  // Fortschritt-Dateien exportiert. Versteckt in den Einstellungen (5× auf die
+  // Versionszeile klicken).
+  freigaben: {loesungen: false, alleLevel: false},
   currentScreen: 'menu',
 
   /* ---------- Profile & Speicher ---------- */
@@ -19902,19 +19465,31 @@ const App = {
     if (p.nachtStatus === undefined) p.nachtStatus = {};
     if (p.bettAt === undefined) p.bettAt = null;
   },
+  /* Ein Computer = ein Spielstand. Die Schüler/innen sind mit ihrem Windows-
+     Konto angemeldet, dadurch hat jedes Browser-Profil automatisch "seinen"
+     Spielstand – ganz ohne Login im Spiel. Ältere Bestände (Gast- & Schüler-
+     Profile aus früheren Versionen) werden übernommen: der Stand mit den
+     meisten geschafften Leveln gewinnt, bei Gleichstand der Gast. */
   loadAll(){
-    this.profiles = U.lsGet('pc_profiles', null);
-    if (!this.profiles || !this.profiles.gast){
-      this.profiles = {gast: this.newProfile('Gast', 'gast')};
-      this.saveAllProfiles();
+    const alt = U.lsGet('pc_profiles', null) || {};
+    let best = null, bestN = -1;
+    for (const k in alt){
+      const p = alt[k];
+      const n = p && p.levelStatus ? Object.values(p.levelStatus).filter(x => x.done).length : 0;
+      const bonus = (k === 'gast') ? 0.5 : 0;
+      if (n + bonus > bestN){ bestN = n + bonus; best = p; }
     }
-    for (const k in this.profiles) this.migrateProfile(this.profiles[k]);
-    this.teacherData = U.lsGet('pc_teacher', null);
-    // Sicherheit: Nach einem Seiten-Neuladen ist die Lehrkraft IMMER abgemeldet –
-    // Lösungen (Lehrkraft-Vorschau) sind erst nach erneuter Anmeldung sichtbar.
-    if (this.teacherData) this.teacherData.loggedIn = false;
-    this.setProfile('gast');
+    if (!best || typeof best !== 'object') best = this.newProfile('', 'gast');
+    best.typ = 'gast';
+    if (best.name === 'Gast') best.name = '';
+    this.profiles = {local: best};
+    this.migrateProfile(best);
+    this.freigaben = U.lsGet('sx_freigaben', null) || {loesungen: false, alleLevel: false};
+    try { localStorage.removeItem('pc_teacher'); } catch(e){}
+    this.saveAllProfiles();
+    this.setProfile('local');
   },
+  saveFreigaben(){ U.lsSet('sx_freigaben', this.freigaben); },
   setProfile(key){
     this.profileKey = key;
     this.profile = this.profiles[key];
@@ -19924,7 +19499,6 @@ const App = {
   },
   saveAllProfiles(){ U.lsSet('pc_profiles', this.profiles); },
   saveProfile(){ this.saveAllProfiles(); },
-  saveTeacher(){ U.lsSet('pc_teacher', this.teacherData); },
 
   /* ---------- Bildschirme ---------- */
   showScreen(name){
@@ -19950,8 +19524,8 @@ const App = {
     const lagerTxt = Object.keys(r).filter(k => r[k] > 0)
       .map(k => (ROHSTOFF_INFO[k] ? ROHSTOFF_INFO[k].name : k) + ': ' + r[k]).join(' · ') || 'noch leer';
     U.$('#menu-profile').innerHTML =
-      'Angemeldet als: <b>' + U.escapeHtml(p.name) + '</b>' + (p.typ === 'schueler' && p.kurs ? ' (Kurs: ' + U.escapeHtml(p.kurs) + ')' : ' (Gast – Fortschritt liegt nur auf diesem Computer)') +
-      ' · Level geschafft: <b>' + done + '</b> · Sterne: <b>' + stars + '</b>' +
+      (p.name ? 'Spieler/in: <b>' + U.escapeHtml(p.name) + '</b> · ' : '') +
+      'Level geschafft: <b>' + done + '</b> · Sterne: <b>' + stars + '</b>' +
       '<br>📦 Lager: ' + lagerTxt;
   },
 
@@ -19984,9 +19558,9 @@ const App = {
     }
     if (topH2) topH2.textContent = 'Weltkarte – Level & Kapitel';
     let lastKap = null;
-    // Lehrkraft-Schalter: ALLE Level freigegeben, auch wenn frühere nicht geschafft sind
-    const d = this.teacherData;
-    const alleFrei = !!(d && d.loggedIn && d.alleLevelFrei);
+    // Lehrkraft-Schalter (versteckt in den Einstellungen): ALLE Level frei,
+    // auch wenn frühere nicht geschafft sind.
+    const alleFrei = !!(this.freigaben && this.freigaben.alleLevel);
     for (let i = 0; i < LEVELS.length; i++){
       const lvl = LEVELS[i];
       const prev = LEVELS[i - 1];
@@ -20189,6 +19763,21 @@ const App = {
         '<button class="btn small" id="btn-opt-neuewelt">🌍 Neue Welt erschaffen</button>' +
         '</div>' +
         '<div class="hint" style="margin-top:6px;">Ego-Ansicht und Neue Welt wirken auf die offene Blockwelt (über „Spielen“ erreichbar). In der Welt selbst öffnet <b>Esc</b> dieses Menü nicht – Esc schließt Fenster, sonst zurück zum Startmenü.</div>' +
+        '<h3 style="margin-top:18px;">Fortschritt als Datei</h3>' +
+        '<label style="display:flex; gap:8px; align-items:center; margin-bottom:8px;"><span style="white-space:nowrap;">Dein Name:</span><input type="text" id="opt-name" style="flex:1;" placeholder="erscheint im Dateinamen" value="' + U.escapeHtml(this.profile.name || '') + '"></label>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+        '<button class="btn small" id="btn-opt-export">💾 Fortschritt speichern (Datei)</button>' +
+        '<label class="btn small" style="position:relative; margin:0;">📂 Fortschritt laden (Datei)<input type="file" id="opt-import" accept=".json" style="position:absolute; inset:0; opacity:0; cursor:pointer;"></label>' +
+        '</div>' +
+        '<div class="hint" style="margin-top:6px;">Speichert deinen Spielstand als Datei <b>mit Datum &amp; Uhrzeit im Namen</b> – als Sicherungskopie oder zum Weiterspielen auf einem anderen Rechner (dort einfach „Fortschritt laden“). Ideal für Netzlaufwerk oder USB-Stick.</div>' +
+        '<div id="opt-version" style="margin-top:22px; font-size:10px; opacity:.4; text-align:center; user-select:none;">Syntaxia v0.1.1</div>' +
+        '<div id="opt-lehrer" style="display:none; margin-top:10px; padding:10px 12px; border:2px dashed #8a8f96;">' +
+        '<h3 style="margin-top:0;">🔒 Lehrkraft-Optionen</h3>' +
+        '<label style="display:flex; gap:8px; align-items:center; cursor:pointer; margin:4px 0;"><input type="checkbox" id="opt-loesungen"> Musterlösungen freigeben (im Level erscheint der !-Knopf)</label>' +
+        '<label style="display:flex; gap:8px; align-items:center; cursor:pointer; margin:4px 0;"><input type="checkbox" id="opt-allelevel"> Alle Level freischalten (Weltkarte ohne Sperren)</label>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"><button class="btn small" id="opt-loesungen-ansehen">📖 Musterlösungen ansehen</button></div>' +
+        '<div class="hint" style="margin-top:6px;">Gilt nur auf diesem Computer und wird nicht in Fortschritt-Dateien gespeichert. Zum Ein-/Ausblenden: 5× auf die Versionszeile klicken.</div>' +
+        '</div>' +
         '</div>',
       buttons: [{label: 'Fertig', primary: true, fn: ()=>{}}]
     });
@@ -20220,6 +19809,67 @@ const App = {
     };
     const sb = U.$('#btn-opt-sound');
     if (sb) sb.onclick = ()=>{ this.toggleSound(); sb.textContent = SFX.muted ? '🔇 Ton einschalten' : '🔊 Ton ausschalten'; };
+    // Fortschritt als Datei sichern / laden (Backup & Rechnerwechsel)
+    const exb = U.$('#btn-opt-export');
+    if (exb) exb.onclick = ()=> this.exportFortschritt();
+    const nmOpt = U.$('#opt-name');
+    if (nmOpt) nmOpt.onchange = ()=>{
+      this.profile.name = nmOpt.value.trim();
+      this.saveProfile();
+      this.renderMenuProfile();
+    };
+    const oimp = U.$('#opt-import');
+    if (oimp) oimp.onchange = (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try { this.importFortschritt(JSON.parse(reader.result)); }
+        catch(err){ this.toast('Keine gültige Fortschritt-Datei.', 'err'); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    };
+    // VERSTECKTE Lehrkraft-Optionen: 5× auf die Versionszeile klicken
+    const vz = U.$('#opt-version');
+    if (vz){
+      let taps = 0, tapTimer = null;
+      vz.onclick = ()=>{
+        taps++;
+        clearTimeout(tapTimer);
+        tapTimer = setTimeout(()=>{ taps = 0; }, 1600);
+        if (taps >= 5){
+          taps = 0;
+          const panel = U.$('#opt-lehrer');
+          if (panel){
+            panel.style.display = panel.style.display === 'none' ? '' : 'none';
+            if (panel.style.display !== 'none') this.toast('Lehrkraft-Optionen eingeblendet.', 'sys');
+          }
+        }
+      };
+    }
+    const ol = U.$('#opt-loesungen');
+    if (ol){
+      ol.checked = !!this.freigaben.loesungen;
+      ol.onchange = ()=>{
+        this.freigaben.loesungen = ol.checked;
+        this.saveFreigaben();
+        if (typeof Game !== 'undefined' && Game.syncLoesungBtn) Game.syncLoesungBtn();
+        this.toast(ol.checked ? 'Musterlösungen freigegeben – im Level erscheint der !-Knopf.' : 'Musterlösungen gesperrt.', ol.checked ? 'ok' : 'sys');
+      };
+    }
+    const oa = U.$('#opt-allelevel');
+    if (oa){
+      oa.checked = !!this.freigaben.alleLevel;
+      oa.onchange = ()=>{
+        this.freigaben.alleLevel = oa.checked;
+        this.saveFreigaben();
+        if (this.currentScreen === 'levels') this.renderLevelGrid();
+        this.toast(oa.checked ? 'Alle Level freigeschaltet.' : 'Level-Sperren aktiv – Levels schalten sich der Reihe nach frei.', oa.checked ? 'ok' : 'sys');
+      };
+    }
+    const mlb = U.$('#opt-loesungen-ansehen');
+    if (mlb) mlb.onclick = ()=> this.openMusterLoesungen();
     // ?-Hilfe (das Willkommens-/Steuerungs-Info, früher der ?-Knopf in der Welt)
     const ib = U.$('#btn-opt-info');
     if (ib) ib.onclick = ()=>{ SFX.click(); if (typeof HUB !== 'undefined' && HUB.zeigeInfo) HUB.zeigeInfo(); };
@@ -20261,37 +19911,145 @@ const App = {
     if (w) w.classList.remove('on');
   },
 
-  /* Darf die Musterlösung gezeigt werden? Nur wenn die Lehrkraft sie für
-     genau diese Schülerin freigegeben hat. Eine angemeldete Lehrkraft sieht
-     die Lösungen nur in der Gast-Vorschau – NIEMALS ein eingeloggter Schüler
-     nur dadurch, dass die Lehrkraft am selben Gerät angemeldet ist. */
+  /* Darf die Musterlösung gezeigt werden? Die Lehrkraft schaltet sie versteckt
+     in den Einstellungen frei (5× auf die Versionszeile klicken) – gilt pro
+     Computer und wird NICHT in Fortschritt-Dateien exportiert. */
   darfLoesung(){
-    const p = this.profile;
-    const d = this.teacherData;
-    if (d && d.loggedIn && p && p.typ !== 'schueler') return true;   // Lehrkraft-Vorschau (Gast)
-    if (!p || p.typ !== 'schueler' || !p.kurs) return false;
-    return !!(d && d.loesungFrei && d.loesungFrei[p.kurs] && d.loesungFrei[p.kurs][p.name]);
+    return !!(this.freigaben && this.freigaben.loesungen);
   },
 
-  /* ---------- Schüler-Login ---------- */
-  loginStudent(name, pw){
-    name = name.trim().toLowerCase();
-    const d = this.teacherData;
-    if (!d || !d.kurse) return {ok:false, msg:'Es gibt noch keinen Lehrerbereich. Frage deine Lehrkraft, dich anzulegen.'};
-    for (const k of d.kurse){
-      for (const s of k.schueler){
-        if (s.name === name){
-          if (U.hashPassword(pw, s.salt) === s.passHash){
-            const key = 's:' + name;
-            if (!this.profiles[key]) this.profiles[key] = this.newProfile(name, 'schueler', k.name);
-            this.setProfile(key);
-            return {ok:true};
-          }
-          return {ok:false, msg:'Falsches Passwort für "' + name + '".'};
-        }
+  /* ---------- Musterlösungen-Übersicht (versteckt in den Einstellungen) ----------
+     Nur für die Lehrkraft: alle Level-Lösungen nach Kapiteln, die Maschinen-
+     Vorlagen, die Dorfaufgaben-Lösungen und die Maschinen-Level – mit Suchfeld.
+     ANSEHEN ist nicht FREIGEBEN: Schüler/innen sehen weiter nichts, solange
+     „Musterlösungen freigeben" im Lehrkraft-Panel aus ist. */
+  mlHtml(suche){
+    suche = (suche || '').toLowerCase();
+    const T = (s)=> String(s || '').toLowerCase().includes(suche);
+    const out = [];
+    out.push('<div class="hint" style="margin:2px 0 10px 0;">Ansehen ist nicht Freigeben: Schüler/innen sehen die Lösungen erst, wenn im Lehrkraft-Panel <b>„Musterlösungen freigeben“</b> angehakt ist. Aktuell: <b>' + (this.freigaben.loesungen ? 'freigegeben' : 'gesperrt') + '</b>.</div>');
+    /* Level-Lösungen, gruppiert nach Kapiteln */
+    let lastKap = null, nLvl = 0, hLvl = '';
+    for (const lvl of LEVELS){
+      const hatText = typeof lvl.loesung === 'string' && lvl.loesung && !lvl.loesung.startsWith('Maschinen-Code');
+      if (suche && !(T(lvl.titel) || T(lvl.loesung) || T(String(lvl.kapitel)))) continue;
+      nLvl++;
+      if (lvl.kapitel !== lastKap){
+        hLvl += '<h3 style="margin-top:12px;">Kapitel ' + lvl.kapitel + (KAPITEL_TITEL[lvl.kapitel] ? ' · ' + KAPITEL_TITEL[lvl.kapitel] : '') + '</h3>';
+        lastKap = lvl.kapitel;
       }
+      let inner = '<h4 style="color:var(--green); margin-top:0;">' + lvl.kapitel + ' · ' + U.escapeHtml(lvl.titel) + '</h4>';
+      inner += hatText ? '<pre>' + U.escapeHtml(lvl.loesung) + '</pre>'
+        : '<div class="hint">Musterlösung steht in der Anleitung des Levels (z. B. Maschinen-Code).</div>';
+      hLvl += '<div class="panel" style="margin-top:10px;">' + inner + '</div>';
     }
-    return {ok:false, msg:'Benutzername nicht gefunden. (Groß-/Kleinschreibung ist egal.)'};
+    out.push(nLvl ? hLvl : '<div class="hint">Kein Level gefunden.</div>');
+    /* Maschinen-Vorlagen */
+    const vor = MACH_VORLAGEN.filter(v => !suche || T(v.name) || T(v.beschreibung) || T(v.code));
+    if (vor.length){
+      let hVor = '<h3 style="margin-top:20px;">Vorschlagslösungen für Maschinen</h3>' +
+        '<p class="hint" style="margin:6px 0;">Diese Maschinen stehen Schüler/innen als <b>Vorlagen</b> zur Verfügung (Maschinen-Übersicht → „Aus Vorlage“) – die Codes kannst du hier vergleichen oder im Unterricht besprechen.</p>';
+      for (const v of vor){
+        hVor += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--green);">' + v.icon + ' ' + U.escapeHtml(v.name) + '</h4>' +
+          '<div class="hint" style="margin:4px 0;">' + U.escapeHtml(v.beschreibung) + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
+      }
+      out.push(hVor);
+    }
+    /* Maschinen der Dorfbewohner */
+    const villagerLoesungen = [
+      {wer: 'Bauer Bruno – Farmautomatik (Tech: Farmautomatik)',
+       aufgabe: 'Eine Maschine, deren Code pflanze_hier() UND ernte_hier() benutzt.',
+       code: 'while True:\n    feld = was_ist_hier()\n    if feld == \'ackerboden\':\n        pflanze_hier()\n    elif feld == \'weizen_reif\':\n        ernte_hier()\n    warte(0.5)\n\n# Variante mit Bewegung: die Maschine läuft den Acker entlang:\n# for i in range(4):\n#     gehe_vorwärts()\n#     pflanze_hier()'},
+      {wer: 'Schmiedin Stella – Sortiererin (Tech: Sortiertechnik)',
+       aufgabe: 'Die chaotische Kiste in Fächer einsortieren (edel / allgemein / essen …).',
+       code: 'while True:\n    for item in kiste_items():\n        if item["fach"] is None:\n            if "edel" in item["tags"]:\n                sortiere_item(item["id"], "edel")\n            elif "essen" in item["tags"]:\n                sortiere_item(item["id"], "essen")\n            else:\n                sortiere_item(item["id"], "allgemein")\n    warte(1)\n'},
+      {wer: 'Erfinderin Ede – Bergbau-Roboter (Tech: Baumaschine)',
+       aufgabe: 'Eine Maschine, deren Code abbaue_hier() benutzt und die sich bewegt.',
+       code: 'while True:\n    vor = was_ist_vor_mir()\n    if vor == \'wand\':\n        drehe_rechts()\n    else:\n        gehe_vorwärts()\n    if was_ist_hier() in (\'erz_kohle\', \'erz_eisen\', \'erz_gold\', \'erz_diamant\'):\n        abbaue_hier()\n    warte(0.4)\n'}
+    ];
+    const vill = villagerLoesungen.filter(v => !suche || T(v.wer) || T(v.aufgabe) || T(v.code));
+    if (vill.length){
+      let hVill = '<h3 style="margin-top:20px;">Maschinen der Dorfbewohner – Vorschlagslösungen</h3>';
+      for (const v of vill){
+        hVill += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(v.wer) + '</h4>' +
+          '<div class="hint" style="margin:4px 0;">' + v.aufgabe + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
+      }
+      out.push(hVill);
+    }
+    /* Maschinen-Level mit echter Musterlösung */
+    const levelLsg = [
+      {lv: 'l7', name: 'Kapitel 8: Maschinen-Werkstatt'},
+      {lv: 'l7f', name: 'Kapitel 7: Die Feldkante (Reihen-Schlangenlinien)'},
+      {lv: 'l7g', name: 'Kapitel 7: Zwei Wiesen, ein Code'},
+      {lv: 'l7a', name: 'Kapitel 8: Doppelte Fenster'},
+      {lv: 'l7b', name: 'Kapitel 8: Die Kettenreaktion'}
+    ].filter(x => {
+      const L = LEVELS.find(y => y.id === x.lv);
+      return L && L.loesung && (!suche || T(x.name) || T(L.loesung));
+    });
+    if (levelLsg.length){
+      let hMl = '<h3 style="margin-top:20px;">Maschinen-Level – echte Musterlösungen</h3>' +
+        '<p class="hint" style="margin:6px 0;">Vier Level drehen sich um Maschinen – hier die vollständigen, erprobten Lösungen (im Level über den <b>!</b>-Knopf sichtbar, solange Musterlösungen freigegeben sind).</p>';
+      for (const {lv, name} of levelLsg){
+        const L = LEVELS.find(y => y.id === lv);
+        hMl += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(name) + '</h4><pre>' + U.escapeHtml(L.loesung) + '</pre></div>';
+      }
+      hMl += '<div class="panel" style="margin-top:14px;"><h3>Eigenbau-Farm &amp; Logikschaltung (offene Welt)</h3>' +
+        '<div class="hint" style="margin:4px 0;">Die Weizenfarm am Start steht <b>nicht mehr fertig</b> – Schüler/innen bauen sie als Brunos erste Aufgabe SELBST: 🚜 Harke wählen und Rechtsklick pflügt, 🌱 Samen wählen und Rechtsklick sät, ohne Werkzeug wird geerntet &amp; sammelt. Umrandung &amp; Wasser sind KEINE Pflicht mehr – wer mag, bewässert als Extra (🪣 Eimer wählen, Rechtsklick ins Wasser, dann Rechtsklick aufs Feld); Weizen neben Wasser wächst schneller. ' +
+        'Die vollautomatische Variante folgt danach: Beobachter + Kabel → Tore → Wasser spült zu den Trichtern → Ernte-Kiste; die <b>Sähmaschine</b> säht neu, die <b>Pumpe</b> holt das Wasser zurück, der <b>Sortier-Meister</b> ordnet die Kiste (Körner → "saat", Stroh → "stroh", Weizen → "essen").</div></div>';
+      out.push(hMl);
+    }
+    return out.join('');
+  },
+  openMusterLoesungen(){
+    SFX.click();
+    this.modal({
+      title: '📖 Musterlösungen – nur Lehrkraft',
+      body: '<div style="display:flex; flex-direction:column; gap:8px; max-height:64vh;">' +
+        '<input type="text" id="ml-suche" placeholder="🔍 Level oder Befehl suchen …" style="flex:none;">' +
+        '<div id="ml-liste" style="flex:1; overflow-y:auto; padding-right:4px;">' + this.mlHtml('') + '</div>' +
+        '</div>',
+      buttons: [{label:'Schließen', primary:true, fn:()=>{}}]
+    });
+    const si = U.$('#ml-suche');
+    if (si) si.oninput = ()=>{
+      const box = U.$('#ml-liste');
+      if (box) box.innerHTML = this.mlHtml(si.value);
+    };
+  },
+
+  /* ---------- Fortschritt-Datei laden (Hauptmenü & Optionen) ----------
+     Spielstand aus einer Datei übernehmen – vom USB-Stick oder Netzlaufwerk,
+     nach einem Rechnerwechsel oder zur Wiederherstellung eines Backups. */
+  importFortschritt(data){
+    if (!data || data.typ !== 'syntaxia-fortschritt' || !data.profil){ this.toast('Das ist keine Syntaxia-Fortschritt-Datei.', 'err'); return; }
+    const p = data.profil;
+    const nm = String(p.name || data.name || '').trim();
+    const altDone = this.profile && this.profile.levelStatus ? Object.values(this.profile.levelStatus).filter(x => x.done).length : 0;
+    const dateiDone = p.levelStatus ? Object.values(p.levelStatus).filter(x => x.done).length : 0;
+    this.confirm('Fortschritt laden?', 'Der aktuelle Stand auf diesem Computer' + (altDone ? ' (' + altDone + ' geschaffte Level)' : '') + ' wird durch den Stand aus der Datei' + (nm ? ' von "' + nm + '"' : '') + (dateiDone ? ' (' + dateiDone + ' geschaffte Level)' : '') + ' ersetzt.', ()=>{
+      p.typ = 'gast';
+      if (p.name === 'Gast') p.name = '';
+      this.profiles = {local: p};
+      this.migrateProfile(p);
+      this.setProfile('local');
+      this.toast('Fortschritt geladen' + (nm ? ' (' + nm + ')' : '') + ' – weiter geht es!', 'ok');
+    });
+  },
+
+  /* ---------- Fortschritt-Datei speichern (Hauptmenü & Optionen) ----------
+     Lädt eine Datei mit Datum & Uhrzeit im Namen herunter – als Sicherungskopie
+     oder um auf einem anderen Rechner weiterzumachen. */
+  exportFortschritt(){
+    const p = this.profile;
+    const d = new Date();
+    const z2 = (n)=> String(n).padStart(2, '0');
+    const stempel = d.getFullYear() + '-' + z2(d.getMonth() + 1) + '-' + z2(d.getDate()) + '_' + z2(d.getHours()) + '-' + z2(d.getMinutes());
+    const wer = p.name ? U.fbKey(p.name) + '_' : '';
+    const fname = 'Syntaxia-Fortschritt_' + wer + stempel + '.json';
+    const datei = {typ: 'syntaxia-fortschritt', version: 1, erstellt: d.toISOString(), name: p.name || '', profil: U.deepClone(p)};
+    U.download(fname, JSON.stringify(datei, null, 2));
+    this.toast('Fortschritt gespeichert: "' + fname + '"', 'ok');
   },
 
   /* ---------- Menü-Hintergrund (auch für die Weltkarte) ---------- */
@@ -20437,8 +20195,19 @@ const App = {
       catch (e){ st.textContent = '✗ ' + e.message; st.className = 'hint err'; }
     };
     MachEd.bind();
-    U.$('#btn-teacher').onclick = ()=>{ SFX.init(); SFX.click(); Teacher.open(); };
-    U.$('#btn-login').onclick = ()=>{ SFX.init(); SFX.click(); this.showScreen('login'); };
+    U.$('#btn-save').onclick = ()=>{ SFX.init(); SFX.click(); this.exportFortschritt(); };
+    const ld = U.$('#btn-load');
+    if (ld) ld.onchange = (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{
+        try { this.importFortschritt(JSON.parse(reader.result)); }
+        catch(err){ this.toast('Keine gültige Fortschritt-Datei.', 'err'); }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    };
     U.$('#btn-levels-back').onclick = ()=>{ SFX.click(); if (App.traumModus){ App.traumModus = false; this.showScreen('menu'); } else this.showScreen('hub'); };
     U.$('#btn-hub-back').onclick = ()=>{ SFX.click(); this.showScreen('menu'); };
     U.$('#btn-hub-levels').onclick = ()=>{ SFX.click(); App.levelsFrom = 'hub'; App.traumModus = false; this.showScreen('levels'); App.renderLevelGrid(); };
@@ -20451,38 +20220,6 @@ const App = {
     U.$('#btn-optionen-menu').onclick = ()=>{ SFX.click(); App.openOptionen(); };
     U.$('#btn-glossar-back').onclick = ()=>{ SFX.click(); App.closeWin('win-glossar'); };
     U.$('#btn-editor-back').onclick = ()=>{ SFX.click(); App.closeWin('win-editor'); };
-    U.$('#btn-teacher-back').onclick = ()=>{ SFX.click(); this.showScreen('menu'); };
-    U.$('#btn-teacher-logout').onclick = ()=>{
-      SFX.click();
-      if (this.teacherData) this.teacherData.loggedIn = false;
-      this.saveTeacher();
-      Teacher.tab = 'konto';
-      Teacher.render();
-      this.toast('Abgemeldet.', 'sys');
-    };
-    U.$('#btn-login-back').onclick = ()=>{ SFX.click(); this.showScreen('menu'); };
-    U.$('#btn-login-go').onclick = ()=>{
-      SFX.click();
-      const res = this.loginStudent(U.$('#login-name').value, U.$('#login-pass').value);
-      const msg = U.$('#login-msg');
-      if (res.ok){
-        msg.textContent = '';
-        U.$('#login-pass').value = '';
-        this.toast('Willkommen, ' + this.profile.name + '!', 'ok');
-        this.showScreen('hub');
-      } else {
-        msg.innerHTML = '<span class="err">' + res.msg + '</span>';
-        SFX.error();
-      }
-    };
-    U.$('#btn-login-guest').onclick = ()=>{
-      SFX.click();
-      this.setProfile('gast');
-      this.toast('Als Gast angemeldet – Fortschritt bleibt auf diesem Computer.', 'sys');
-      this.showScreen('hub');
-    };
-    // Eingabetaste im Login
-    U.$('#login-pass').addEventListener('keydown', (e)=>{ if (e.key === 'Enter') U.$('#btn-login-go').click(); });
   }
 };
 
