@@ -125,6 +125,8 @@ table.data tr:nth-child(even) td{background:#1a212c;}
 #menu-foot{position:absolute; bottom:14px; width:100%; text-align:center; color:#566373; font-size:11px;}
 #menu-cubes{position:absolute; inset:0; pointer-events:none; overflow:hidden;}
 .float-cube{position:absolute; width:46px; height:46px; opacity:.16; animation:floaty 9s ease-in-out infinite;}
+/* Sparmodus: teure Dauer-Animationen aus */
+body.sparen .float-cube{animation:none;}
 @keyframes floaty{0%,100%{transform:translateY(0) rotate(0deg);}50%{transform:translateY(-26px) rotate(8deg);}}
 
 /* ---------- Weltkarte: gleicher Look wie das Hauptmenü (dunkel + schwebende Würfel) ----------
@@ -210,7 +212,7 @@ table.data tr:nth-child(even) td{background:#1a212c;}
 #console .good{color:#9be27a;}
 
 /* NACHTMODUS: Maschinen-Textfelder transparent – die Traum-Insel bleibt sichtbar */
-body.nacht-modus #machine-menu{background:rgba(16,22,38,.6); backdrop-filter:blur(2px);}
+body.nacht-modus #machine-menu{background:rgba(16,22,38,.85);}
 body.nacht-modus #machine-menu b{color:#cfd8f8;}
 body.nacht-modus #win-editor .win-box{background:rgba(18,24,42,.5);}
 body.nacht-modus #win-editor .panel{background:rgba(16,22,38,.62);}
@@ -462,7 +464,7 @@ hr.sep{border:none; border-top:2px solid var(--line); margin:10px 0;}
     <label class="btn" style="position:relative; display:block; text-align:center;" title="Spielstand aus einer Datei laden (z. B. USB-Stick oder Netzlaufwerk)">📂 Fortschritt laden<input type="file" id="btn-load" accept=".json" style="position:absolute; inset:0; opacity:0; cursor:pointer;"></label>
   </div>
   <div id="menu-profile"></div>
-  <div id="menu-foot">Syntaxia v0.1.2 · läuft komplett offline · Dein Fortschritt wird auf diesem Computer gespeichert</div>
+  <div id="menu-foot">Syntaxia v0.1.3 · läuft komplett offline · Dein Fortschritt wird auf diesem Computer gespeichert</div>
 </div>
 
 <div id="screen-levels" class="screen">
@@ -4490,6 +4492,110 @@ class World {
 /* ============ 06: Isometrischer Renderer (Top-Down 30°–45° Look) ============ */
 const TW = 64, TH = 32;   // Kachelgröße (Raute)
 
+/* ================= Grafik-Auto-Pilot (für schwache Schul-PCs) =================
+   Das Spiel zeichnet jede Frame eine Blockwelt – auf alten Rechnern ruckelt
+   das. Der Auto-Pilot misst die Framerate und senkt die Grafikstufe, bis es
+   flüssig läuft (und erhöht sie wieder, wenn Reserve da ist). Jede Stufe
+   senkt vor allem die RENDER-AUFLÖSUNG (der größte Hebel) und schaltet
+   teure Effekte ab: Hintergrund-Blur, Wolkenschatten, viele Partikel.
+   Voreinstellung „Auto“; in den Einstellungen fest wählbar. */
+const GRAFIK = {
+  stufen: ['hoch', 'mittel', 'sparen', 'maxi'],
+  cfg: {
+    hoch:   {dprCap: 2,    scale: 1,    blur: true,  inseln: 6, wolken: 8, schatten: true,  partikel: 1,    name: 'Hoch'},
+    mittel: {dprCap: 1.25, scale: 0.85, blur: false, inseln: 4, wolken: 5, schatten: true,  partikel: 0.7,  name: 'Mittel'},
+    sparen: {dprCap: 1,    scale: 0.75, blur: false, inseln: 2, wolken: 2, schatten: false, partikel: 0.45, name: 'Sparmodus'},
+    maxi:   {dprCap: 1,    scale: 0.6,  blur: false, inseln: 0, wolken: 0, schatten: false, partikel: 0.3,  name: 'Sparmodus+'}
+  },
+  auto: true,          // Auto-Pilot an? (App.profile.grafik === 'auto')
+  idx: 1,              // Start: mittel (Schul-Rechner)
+  fps: 0,
+  _acc: 0, _n: 0, _win: 0, _last: 0, _hochW: 0, _cool: 0, _msk: 0, _ui: null,
+
+  eff(){ return this.cfg[this.stufen[this.idx]] || this.cfg.mittel; },
+  stufe(){ return this.stufen[this.idx] || 'mittel'; },
+
+  /* Wählt die Stufe laut Profil (App.profile.grafik: auto/hoch/mittel/sparen). */
+  setFromProfile(){
+    const p = (typeof App !== 'undefined' && App.profile) ? App.profile : {};
+    const wahl = p.grafik || 'auto';
+    if (wahl === 'auto'){
+      this.auto = true;
+      const merker = p.grafikAuto || 'mittel';
+      const i = this.stufen.indexOf(merker);
+      this.idx = (i >= 0) ? i : 1;
+    } else {
+      this.auto = false;
+      const i = this.stufen.indexOf(wahl);
+      this.idx = (i >= 0) ? i : 1;
+    }
+    this._cool = 2; this._hochW = 0;
+    this.anwenden(false);
+  },
+
+  /* Einmal pro Frame aufrufen (beide Spielschleifen). Misst die Framerate. */
+  tick(now){
+    if (!this._win) this._win = now;
+    if (this._last){
+      const dt = now - this._last;
+      if (dt > 0 && dt < 250){ this._acc += dt; this._n++; }
+    }
+    this._last = now;
+    if (now - this._win >= 3000 && this._n > 4){
+      this.fps = Math.round(1000 * this._n / this._acc);
+      this._win = now; this._acc = 0; this._n = 0;
+      if (this.auto) this.reguliere();
+      if (this._ui) this._ui();
+    }
+  },
+
+  /* Nach oben (viel Reserve) / unten (ruckelt) – mit Abkühlphasen. */
+  reguliere(){
+    if (this._cool > 0){ this._cool--; return; }
+    const fps = this.fps;
+    let moved = false;
+    if (fps < 38 && this.idx < this.stufen.length - 1){
+      this.idx++; moved = true; this._cool = 1; this._hochW = 0;
+    } else if (fps > 55 && this.idx > 0){
+      this._hochW++;
+      if (this._hochW >= 2){ this.idx--; moved = true; this._hochW = 0; this._cool = 1; }
+    } else {
+      this._hochW = 0;
+    }
+    if (moved) this.anwenden(true);
+  },
+
+  /* Stufe anwenden: Canvas-Auflösung + Effekte + Sparmodus-Merkel am <body>. */
+  anwenden(melden){
+    if (typeof App !== 'undefined' && App.profile){
+      if (this.auto) App.profile.grafikAuto = this.stufe();
+      App.saveProfile();
+    }
+    if (typeof document !== 'undefined' && document.body) document.body.classList.toggle('sparen', this.idx >= 2);
+    if (typeof RND !== 'undefined' && RND.ready) RND.resize();
+    if (melden && typeof App !== 'undefined' && App.toast)
+      App.toast('⚡ Grafik automatisch auf „' + this.eff().name + '“ gestellt – so läuft es ruckelfrei.', 'sys');
+  },
+
+  vorbereiten(){ this.setFromProfile(); },
+
+  statusHtml(){
+    const art = this.auto ? ' · Auto-Pilot (passt sich selbst an)' : ' · fest eingestellt';
+    const fps = this.fps ? ' · zuletzt ca. ' + this.fps + ' FPS' : '';
+    return 'Aktuell: <b>' + this.eff().name + '</b>' + art + fps;
+  },
+
+  /* Ruckel-Schutz: liegt ein Dialog/Fenster offen, genügt es, die Welt nur
+     jedes 3. Frame zu zeichnen (der Hintergrund ist eh abgedunkelt). */
+  duerfZeichnen(){
+    const root = document.getElementById('modal-root');
+    const offen = root && root.style.display === 'flex';
+    if (!offen){ this._msk = 0; return true; }
+    this._msk = (this._msk + 1) % 3;
+    return this._msk === 0;
+  }
+};
+
 const RND = {
   canvas: null, ctx: null,
   // tx/ty = Kamera-Ziel (folgt der Figur, auch in die Tiefe: z), following =
@@ -4526,12 +4632,17 @@ const RND = {
     if (!this.ready || !this.canvas) return;
     const area = this.canvas.parentElement || U.$('#game-area');
     const r = area.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    // Grafikstufe: devicePixelRatio deckeln + interne Render-Auflösung senken.
+    // Kleineres Canvas = quadratisch weniger Pixel-Arbeit pro Frame.
+    const q = (typeof GRAFIK !== 'undefined') ? GRAFIK.eff() : null;
+    const dpr = Math.min(window.devicePixelRatio || 1, q ? q.dprCap : 2) * (q ? q.scale : 1);
     this.canvas.width = Math.max(100, Math.floor(r.width * dpr));
     this.canvas.height = Math.max(100, Math.floor(r.height * dpr));
     this.canvas.style.width = r.width + 'px';
     this.canvas.style.height = r.height + 'px';
     this.dpr = dpr;
+    this._skyKey = null;                          // Verlauf neu bauen (Höhe kann weichen)
+    this.canvas.style.imageRendering = (q && q.scale < 1) ? 'pixelated' : 'auto';
   },
 
   // Bildschirm → Kachel (höhenbewusst: Bergspitzen werden korrekt getroffen).
@@ -4667,15 +4778,23 @@ const RND = {
 
   drawSkyBG(ctx, cw, ch, t){
     if (!this._bgBuilt) this._buildBG();
+    const q = (typeof GRAFIK !== 'undefined') ? GRAFIK.eff() : null;
+    const nInseln = q ? q.inseln : this._bgIslands.length;
+    const nWolken = q ? q.wolken : this._bgClouds.length;
     const px = -this.cam.x * 0.08, py = -this.cam.y * 0.08;      // Parallaxe: ferne Welt bewegt sich langsamer
     const span = cw + 760;
-    try { ctx.filter = 'blur(4px)'; } catch(e){}
-    for (const isle of this._bgIslands){
-      const bx = ((isle.u * span + px) % span + span) % span - 380;
-      this.drawFarIsland(ctx, bx, ch * isle.v + py * 0.6, isle);
+    if (nInseln > 0){
+      // Blur-Filter nur auf „Hoch“ – er kostet pro Frame ein Vollbild-Weichzeichnen
+      if (q && q.blur){ try { ctx.filter = 'blur(4px)'; } catch(e){} }
+      for (let i = 0; i < nInseln && i < this._bgIslands.length; i++){
+        const isle = this._bgIslands[i];
+        const bx = ((isle.u * span + px) % span + span) % span - 380;
+        this.drawFarIsland(ctx, bx, ch * isle.v + py * 0.6, isle);
+      }
+      if (q && q.blur){ try { ctx.filter = 'none'; } catch(e){} }
     }
-    try { ctx.filter = 'none'; } catch(e){}
-    for (const c of this._bgClouds){                              // Wolken ziehen unter der Levelkarte vorbei
+    for (let i = 0; i < nWolken && i < this._bgClouds.length; i++){  // Wolken ziehen unter der Levelkarte vorbei
+      const c = this._bgClouds[i];
       const cx = ((t * c.spd + c.off) % span + span) % span - 380;
       this.drawCloudBlob(ctx, cx, ch * c.v, c.s, 0.5);
     }
@@ -4718,9 +4837,13 @@ const RND = {
     const underMode = vz !== null && (vz < 0 || covered);
 
     // Himmel / Untergrund
-    const sky = ctx.createLinearGradient(0, 0, 0, ch);
-    sky.addColorStop(0, '#3a5a8c'); sky.addColorStop(0.45, '#1d2634'); sky.addColorStop(1, '#10151c');
-    ctx.fillStyle = sky;
+    const skyKey = ch + '|' + (ctx === this._skyCtx);
+    if (this._skyKey !== skyKey){
+      const g2 = ctx.createLinearGradient(0, 0, 0, ch);
+      g2.addColorStop(0, '#3a5a8c'); g2.addColorStop(0.45, '#1d2634'); g2.addColorStop(1, '#10151c');
+      this._skyG = g2; this._skyKey = skyKey; this._skyCtx = ctx;
+    }
+    ctx.fillStyle = this._skyG;
     ctx.fillRect(0, 0, cw, ch);
     // In den Leveln (nicht Hub): ferne Schwebinseln + Wolken = Skyworld-Hintergrund
     if (!world.isHub && !underMode) this.drawSkyBG(ctx, cw, ch, t);
@@ -4876,6 +4999,7 @@ const RND = {
     };
     const cloudAt = (gx, gy)=>{
       if (vz !== null) return 0;                        // kein Wolkenschatten im Höhlen-Schnitt
+      if (!GRAFIK.eff().schatten) return 0;             // Sparmodus: Wolkenschatten aus
       let a = 0;
       for (const c of gclouds){
         const cxp = ((t * c.spd + c.off) % (world.w + 40)) - 20;
@@ -5903,10 +6027,13 @@ const RND = {
   },
 
   burst(x, y, color, n, z){
-    for (let i = 0; i < (n || 8); i++){
+    const q = (typeof GRAFIK !== 'undefined') ? GRAFIK.eff() : null;
+    const anzahl = Math.max(1, Math.round((n || 8) * (q ? q.partikel : 1)));
+    for (let i = 0; i < anzahl; i++){
       this.parts.push({x, y, color, vx: U.rand(-30, 30), vy: U.rand(20, 60), ox: U.rand(-8, 8), oy: U.rand(0, 14), t: 0, z: z || 0});
     }
-    if (this.parts.length > 120) this.parts.splice(0, this.parts.length - 120);
+    const max = Math.max(24, Math.round(120 * (q ? q.partikel : 1)));
+    if (this.parts.length > max) this.parts.splice(0, this.parts.length - max);
   },
 
   update(dt){
@@ -6057,8 +6184,8 @@ function buildBuiltins(ctx){
     P.anim = {fromX: P.x, fromY: P.y, toX: nx, toY: ny, fromZ: P.z || 0, toZ: toZ, t: 0, dur: dur};
     P.walking = true;
     P.x = nx; P.y = ny; P.z = toZ;
-    if (ctx.kind === 'player' && typeof Game !== 'undefined' && Game.level && Game.level.nachSchritt && w === Game.world) Game.level.nachSchritt(w);
     SFX.step();
+    if (typeof Game !== 'undefined' && Game.level && Game.level.truheAbRunden) Game.truheRundenTick();
     if (kletter){
       RND.burst(nx, ny, toZ > P.anim.fromZ ? '#cfe8ff' : '#8a6244', 6);
       yield {waitMs: 480};
@@ -8095,7 +8222,7 @@ const LEVELS = [
       'Der Baum liegt 4 Felder östlich von dir. Schreibe also 4× <b>gehe_vorwärts()</b> untereinander – und danach <b>abbaue()</b>.',
       'Alles läuft geradeaus – drehen brauchst du hier noch nicht. Das kommt im nächsten Level ("Erste Drehungen").',
       'Dann drücke den grünen Knopf "Ausführen" und beobachte deine Figur!',
-      'Falls es klemmt: Der ?-Knopf (Hilfe) zeigt dir einen Tipp nach dem anderen – probiere jeden Schritt direkt aus!'
+      'Falls es klemmt: Der ?-Knopf oben zeigt dir Schritt für Schritt Tipps. Probiere jeden direkt aus!'
     ],
     allowMachines: false
   },
@@ -8374,8 +8501,8 @@ const LEVELS = [
 
   {
     id: 'l2w', kapitel: 2, titel: 'Der Dauerlauf (while True)',
-    desc: 'while True: Ein Programm, das nie aufhört – nach 2 Runden erscheint die Truhe, und die Figur dreht weiter ihre Runden.',
-    briefing: 'Neues Werkzeug: <b>while True:</b>! Ein while-Kopf sieht aus wie ein for-Kopf – nur läuft er ENDLOS weiter (ein <b>Dauerlauf</b>). In den Körper (4 Leerzeichen eingerückt) gehört eine ganze Runde: je 5× laufen (mit deiner for-Schleife) und sammle(), dann drehe_rechts(). Neu ist <span class="kbd">sammle()</span>: Es nimmt auf, was auf dem Feld liegt – hier öffnet es die Schatztruhe. Die Truhe erscheint aber erst, nachdem deine Figur <b>2 volle Runden</b> gelaufen ist – lass den Dauerlauf laufen und warte ab!',
+    desc: 'while True: Ein Programm, das nie aufhört – die Figur dreht Runde um Runde, bis nach 2 Runden die Truhe erscheint und geöffnet wird.',
+    briefing: 'Neues Werkzeug: <b>while True:</b>! Ein while-Kopf sieht aus wie ein for-Kopf – nur läuft er ENDLOS weiter (ein <b>Dauerlauf</b>). Neuer Befehl: <span class="kbd">sammle()</span> nimmt alles auf, was auf dem Feld liegt, auf dem du stehst. In den Körper (4 Leerzeichen eingerückt) gehört eine ganze Runde: je 5× laufen (mit deiner for-Schleife) und sammle(), dann drehe_rechts(). Deine Figur dreht so ihre Runden – <b>erst nach 2 ganzen Runden erscheint die Schatztruhe</b> auf dem Rundweg. Sobald du sie mit sammle() einsammelst, ist das Level geschafft. <b>Achtung:</b> Geschafft zählt es erst MIT while True!',
     map: [
       'hhhhhhhh',
       'h......h',
@@ -8387,27 +8514,11 @@ const LEVELS = [
       'hhhhhhhh'
     ],
     player: {x: 1, y: 1, dir: 1},
-    objects: [],                    // Truhe erscheint erst nach 2 vollen Runden (siehe nachSchritt)
-    randomize(w){ w._runden = 0; w._rundeWeg = false; },
-    // Zählt volle Runden: immer wenn die Figur ZURÜCK am Startfeld (1,1) ankommt.
-    // Nach der 2. Runde erscheint die Schatztruhe auf der Nordseite.
-    nachSchritt(w){
-      const P = w.player;
-      const amStart = (P.x === 1 && P.y === 1);
-      if (amStart && w._rundeWeg){
-        w._runden++;
-        w._rundeWeg = false;
-        if (w._runden >= 2 && !w.items.some(i2 => i2.typ === 'truhe')){
-          w.items.push({typ: 'truhe', x: 4, y: 1});
-          SFX.pop();
-          RND.floatText(4, 1, 'Truhe!', '#e8b64a');
-          App.toast('2 volle Runden geschafft – die Schatztruhe erscheint auf der Nordseite!', 'ok');
-        }
-      } else if (!amStart){ w._rundeWeg = true; }
-    },
+    objects: [],
+    truheAbRunden: 2, truheAt: {x:4, y:1},   // Truhe erscheint erst nach 2 gelaufenen Runden (40 Schritten)
     npcs: [],
     aufgaben: [
-      {id:'a1', text:'Laufe 2 volle Runden – dann erscheint die Truhe. Öffne sie mit sammle().', check: S => !!S.events.collected.truhe}
+      {id:'a1', text:'Öffne die Schatztruhe, die nach 2 Runden erscheint (sammle()).', check: S => !!S.events.collected.truhe}
     ],
     pflicht: {
       kurz: 'Benutze while True (ohne Dauerlauf zählt das Level nicht).',
@@ -8419,7 +8530,7 @@ const LEVELS = [
     tutorial: [
       {text: 'Der Schleifen-Kopf: <span class="kbd">while True:</span> – der Doppelpunkt ist Pflicht! True heißt: die Bedingung ist IMMER wahr. Die Schleife hört NIE von selbst auf (ein Dauerlauf).', manual: true},
       {text: 'In den Körper (4 Leerzeichen) kommt EINE Seite der Runde: <span class="kbd">for i in range(5):</span> mit gehe_vorwärts() und sammle() eingerückt – danach (wieder 4 Leerzeichen) <b>drehe_rechts()</b>.', manual: true},
-      {text: 'Jeder Durchlauf = eine Seite. Nach 4 Durchläufen ist die Figur wieder am Start – eine volle Runde geschafft! Nach der <b>zweiten</b> Runde erscheint die Schatztruhe auf der Nordseite. Beim nächsten Lauf über sie öffnet sammle() sie – dann ist das Level geschafft.', manual: true}
+      {text: 'Jeder Durchlauf = eine Seite. Nach 4 Durchläufen ist die Figur wieder am Start und dreht einfach weiter. Die Truhe erscheint erst nach <b>2 ganzen Runden</b> (40 Schritten) auf der Nordseite – sammle() nimmt sie mit, sobald du drüberläufst. Danach ist das Level geschafft; den Dauerlauf kannst du mit <b>Stop</b> anhalten (oder laufen lassen).', manual: true}
     ],
     chips: ['while True:\n    ...', 'for i in range(5):\n    gehe_vorwärts()', 'drehe_rechts()', 'sammle()'],
     startCode: '# while True: alles Eingerückte läuft ENDLOS weiter\nwhile True:\n    \n',
@@ -8427,7 +8538,7 @@ const LEVELS = [
     hinweise: [
       'Der while-Kopf steht ganz außen: while True: – alles andere wird 4 Leerzeichen eingerückt.',
       'Eine Runde = 4 Seiten: je 5× laufen (for i in range(5):) mit sammle() darin, dann drehe_rechts().',
-      'Die Truhe erscheint nach 2 vollen Runden auf der Nordseite, 3 Felder östlich vom Start – sammle() öffnet sie.',
+      'Die Truhe erscheint erst nach 2 ganzen Runden auf der Nordseite – sammle() schaut bei jedem Schritt nach, ob eine Truhe unter dir steht.',
       'Nach dem Öffnen der Truhe ist das Level geschafft. Der Dauerlauf läuft weiter, bis du Stop drückst.'
     ],
     allowMachines: false
@@ -8509,8 +8620,8 @@ const LEVELS = [
 
   {
     id: 'l2a', kapitel: 2, titel: 'Übung: Die Wand voraus',
-    desc: 'Übung mit if: Wand voraus? Dann drehen – sonst weiter. U-Weg mit 2 Bäumen und einer Truhe am Ende.',
-    briefing: 'Übung mit dem if-Muster aus „Die erste Entscheidung“! Bei jeder Ecke prüft deine Figur: <span class="kbd">if was_ist_vor_mir() == \'wand\':</span> – nur dann dreht sie sich, und der if-Körper bleibt eingerückt. Am Ende des U-Wegs wartet eine Truhe (sammle()!).',
+    desc: 'Übung zum if: Prüfe mit was_ist_vor_mir(), ob eine Wand blockiert – und drehe nur dann.',
+    briefing: 'Übung! Das if-Muster kennst du aus „Die erste Entscheidung“. Mit <span class="kbd">if was_ist_vor_mir() == \'wand\':</span> prüft deine Figur <b>vor jedem Dreh</b>, ob wirklich eine Wand im Weg steht – nur dann dreht sie sich. Der if-Körper ist eingerückt, genau wie beim for!',
         map: [
       'hhhhhhhhh',
       'h,,,,,,Th',
@@ -8563,7 +8674,7 @@ const LEVELS = [
     npcs: [],
     aufgaben: [
       {id:'a1', text:'Fälle alle 6 Bäume am Ring.', check: S => (S.lager.holz || 0) >= 6},
-      {id:'a2', text:'Öffne die Schatztruhe am Westrand (nahe der Nordwest-Ecke).', check: S => !!S.events.collected.truhe}
+      {id:'a2', text:'Öffne die Schatztruhe an der Westseite.', check: S => !!S.events.collected.truhe}
     ],
     bonus: {id:'b1', text:'Benutze if mit else.', check: S => /\belse\s*:/.test(S.code)},
     tutorial: [
@@ -8579,14 +8690,14 @@ const LEVELS = [
       'Erste Ebene: if was_ist_vor_mir() == \'wand\': (8 Leerzeichen für den Körper: drehe_rechts()).',
       'Zweite Ebene: else: auf derselben Einrückungsebene wie if – darunter (12 Leerzeichen) gehe_vorwärts().',
       'Nach dem if/else-Block (wieder 4 Leerzeichen, noch in der Schleife): sammle() und abbaue().',
-      'Wenn die Figur am Ende noch nicht bei der Truhe war: sie liegt am Westrand, 2 Felder unter der Nordwest-Ecke – 24 Durchläufe reichen genau!'
+      'Wenn die Figur am Ende noch nicht bei der Truhe war: die Truhe liegt auf dem Westweg (Reihe 2) – 24 Durchläufe reichen genau!'
     ],
     allowMachines: false
   },
 
   {
     id: 'l2c', kapitel: 2, titel: 'Übung: Der Gabelweg',
-    desc: 'Übung mit zwei if-Fragen: Wand voraus? → rechts drehen. Baum voraus? → links drehen!',
+    desc: 'Übung mit zwei if-Fragen: Wand voraus? → rechts. Baum voraus? → links!',
     briefing: 'Der Gabelweg hat <b>zwei Arten von Wegweisern</b>: Vor einer <b>Wand</b> dreht deine Figur nach <b>rechts</b> – vor einem <b>Baum</b> nach <b>links</b>! Der Sensor verrät den Unterschied: <span class="kbd">was_ist_vor_mir()</span> liefert <span class="kbd">\'wand\'</span> oder <span class="kbd">\'baum\'</span>. Du brauchst also <b>zwei if-Fragen hintereinander</b>. Aufsammeln nicht vergessen: <b>Kohle-Erze</b> liegen am Weg – <b>abbaue()</b>, und die Truhe wird mit <b>sammle()</b> geöffnet!',
         map: [
       'hhhhhhhhhhhh',
@@ -8627,7 +8738,7 @@ const LEVELS = [
   {
     id: 'l2d', kapitel: 2, titel: 'Übung: Das Erz-Feld',
     desc: 'Übung: Ein Feld systematisch ablaufen – Reihe für Reihe – und mit was_ist_hier() Erz unter dir finden.',
-    briefing: 'Hier liegt ein ganzes <b>Erz-Feld</b>! Dein Programm läuft es Reihe für Reihe ab (Schlangenweg): 4× laufen und dabei prüfen: <span class="kbd">if was_ist_hier() == \'erz_kohle\':</span> → <b>abbaue()</b>. Nach jeder Reihe: <b>drehe_rechts(), gehe_vorwärts(), drehe_rechts()</b> – dann läuft die Figur die nächste Reihe in die andere Richtung. So findet sie JEDES Erz!',
+    briefing: 'Hier liegt ein ganzes <b>Erz-Feld</b>! Dein Programm läuft es Reihe für Reihe ab und prüft jeden Schritt: <span class="kbd">if was_ist_hier() == \'erz_kohle\':</span> → <b>abbaue()</b>. Nach jeder Reihe wendest du: <b>drehe_rechts(), gehe_vorwärts(), drehe_rechts()</b> – die nächste Reihe läuft rückwärts. So findet die Figur JEDES Erz – ganz ohne Koordinaten!',
     map: [
       'hhhhhhhhhh',
       'h........h',
@@ -8864,7 +8975,7 @@ const LEVELS = [
     startCode: '# Erst zum Rand, dann platziere(\'dreck\') in die Schlucht, rüber, ernten!\n\n',
     loesung: 'for i in range(2):\n    gehe_vorwärts()\nplatziere(\'dreck\')\ngehe_vorwärts()\ngehe_vorwärts()\ndrehe_links()\ngehe_vorwärts()\nabbaue()\ndrehe_rechts()\ngehe_vorwärts()\nabbaue()\ndrehe_rechts()\nfor i in range(3):\n    gehe_vorwärts()\nabbaue()\ndrehe_rechts()\ngehe_vorwärts()\nabbaue()',
     hinweise: [
-      '2× gehe_vorwärts() bringt dich an den Rand (Spalte 5, Reihe 3).',
+      '2× gehe_vorwärts() bringt dich an den Rand (Feld 5, Reihe 3) – direkt vor der Schlucht.',
       'platziere(\'dreck\') → Block in der Schlucht auf deiner Höhe! Dann 2× gehe_vorwärts() über die Brücke.',
       'Am Ostufer: links (Norden) zum Baum, abbaue(); rechts (Osten) zur Kohle, abbaue(); rechts (Süden) 3 Felder zur Kohle unten, abbaue(); rechts (Westen) 1 Feld zum Baum, abbaue().'
     ],
@@ -8911,7 +9022,7 @@ const LEVELS = [
     loesung: 'gehe_vorwärts()\ngehe_vorwärts()\nplatziere(\'dreck\')\ngehe_vorwärts()\nplatziere(\'dreck\')\ngehe_vorwärts()\ngehe_vorwärts()\ndrehe_links()\ngehe_vorwärts()\ngehe_vorwärts()\nabbaue()\ndrehe_rechts()\ngehe_vorwärts()\ngehe_vorwärts()\nabbaue()\ndrehe_rechts()\nfor i in range(3):\n    gehe_vorwärts()\nabbaue()\ndrehe_links()\ngehe_vorwärts()\nabbaue()',
     hinweise: [
       '2× nach Osten bis an den Rand (6,5). platziere(\'dreck\') füllt das Schluchtfeld (7,5) vor dir – auf deiner Ebene.',
-      '1× vor auf den Block, nochmal platziere(\'dreck\') für (8,5), dann 2× vor auf das Ostufer (9,5).',
+      '1× vor auf den Block, nochmal platziere(\'dreck\') für (8,5), dann 2× vor aufs Ostufer (9,5).',
       'Norden: 2× laufen → Baum (9,3) abbaue(). Osten: 2× laufen → Baum (11,3) abbaue().',
       'Süden: 3× laufen → Kohleerz (11,6) abbaue(). Osten: 1× laufen → Kohleerz (12,6) abbaue().',
       'Du hast 4 Erde-Blöcke bekommen – 2 reichen für die Brücke, der Rest ist Reserve.'
@@ -9012,7 +9123,7 @@ const LEVELS = [
   {
     id: 'l5', kapitel: 5, titel: 'Das Lager sortieren',
     desc: 'Kisten mit GEHEIMEN Gewichten: nur wiege_hier() und Vergleiche finden die leichte Kiste zuerst (Selection Sort).',
-    briefing: 'Im Lager zählt Ordnung – aber die Zahlen auf den Kisten sind <b>abgeblendet</b>! Du siehst nicht, welche Kiste leicht ist. Neue Sensorik: <span class="kbd">wiege_hier()</span> wiegt die Kiste UNTER dir (0 = keine Kiste). Klassischer Algorithmus: <b>Selection Sort</b> – suche die leichteste Kiste (VERGLEICHEN!), bringe sie zum goldenen Lagerplatz, wiederhole. Der Stapel verlangt die aufsteigende Reihenfolge: immer die leichteste REST-Kiste zuerst.',
+    briefing: 'Im Lager zählt Ordnung – aber die Zahlen auf den Kisten sind <b>abgeblendet</b>! Du siehst nicht, welche Kiste leicht ist. Neue Sensorik: <span class="kbd">wiege_hier()</span> wiegt die Kiste UNTER dir (0 = keine Kiste). Klassischer Algorithmus: <b>Selection Sort</b> – suche die leichteste Kiste (VERGLEICHEN!), bringe sie zum goldenen Lagerplatz, wiederhole. Der Stapel zwingt die aufsteigende Reihenfolge.',
     wuerfel: true,
     randomize(w){
       // Gewichte 3,5,7,9 werden bei jedem Start neu verteilt
@@ -9126,7 +9237,7 @@ const LEVELS = [
       {text: 'Fächer-Sortierung (Bucket Sort): erst <b>messen</b> – <span class="kbd">w = wiege_hier()</span> – dann <b>vergleichen</b>: <span class="kbd">if w &lt;= 3:</span> → Fach 1 (Spalte 8), <span class="kbd">elif w &lt;= 6:</span> → Fach 2 (Spalte 9), <span class="kbd">else:</span> → Fach 3 (Spalte 10).', manual: true},
       {text: 'Kiste finden & greifen: die Reihe ablaufen (Kisten stehen auf Spalten 2, 4 und 6), bei der ersten Kiste wiegen und <b>sammle()</b> + <b>break</b>. WICHTIG: die Messung VOR dem Greifen speichern – in der Hand ist sie nicht mehr wiegbar!', manual: true},
       {text: 'Zur richtigen Spalte: <span class="kbd">pos = meine_position()</span> verrät, wo du stehst. Dann genau so viele Schritte wie nötig: <span class="kbd">for i in range(ziel - pos[0]): gehe_vorwärts()</span> – und <b>ablegen()</b> auf dem Fach.', manual: true},
-      {text: 'Wiederholung: Packe alle Schritte in eine eigene Funktion <span class="kbd">def einsortieren():</span> (alles eine Ebene weiter eingerückt) und rufe sie dreimal auf. Am Ende jedes Aufrufs: 2× drehe_rechts, zurück zum Zeilenanfang (Spalte 1), wieder 2× drehe_rechts. Die Reihenfolge der Fächer darf beliebig sein!', manual: true}
+      {text: 'Wiederholung: packe alles in eine eigene Funktion (<span class="kbd">def einsortieren():</span> …) und rufe <span class="kbd">einsortieren()</span> dreimal auf. Vor jedem Aufruf: umdrehen (2× drehe_rechts), zurück zum Zeilenanfang (Spalte 1), wieder umdrehen. Die Reihenfolge der Fächer darf beliebig sein!', manual: true}
     ],
     chips: ['w = wiege_hier()', 'if w <= 3:\n    ...', 'elif w <= 6:\n    ...', 'pos = meine_position()', 'sammle()', 'ablegen()'],
     startCode: '# Bucket-Sort: wiegen -> vergleichen -> ins passende Fach tragen.\n# Fach 1 (Spalte 8): w <= 3 · Fach 2 (Spalte 9): w <= 6 · Fach 3 (Spalte 10): schwerer\n\n',
@@ -9246,7 +9357,7 @@ const LEVELS = [
   {
     id: 'l6b', kapitel: 5, titel: 'Die Ernte in die Kiste',
     desc: 'Ernte den Acker und lager den Weizen in die große Ernte-Kiste – die erste Stufe der Farm-Progression!',
-    briefing: 'Farmer packt ein! Ernte den Acker (8 Felder) und bringe den Weizen zur <b>großen Ernte-Kiste</b> im Osten. Stelle dich neben die Kiste und rufe <span class="kbd">lagere()</span> – heute bist <b>du</b> der Transporteur!',
+    briefing: 'Farmer packt ein! Ernte den Acker (8 Felder) und bringe den Weizen zur <b>großen Ernte-Kiste</b> im Osten. Stelle dich neben sie und rufe <span class="kbd">lagere()</span>. Später erledigen das deine Maschinen – aber zuerst bist <b>du</b> der Transporteur!',
     map: [
       'hhhhhhhhhh',
       'h........h',
@@ -9293,7 +9404,7 @@ const LEVELS = [
   {
     id: 'l6e', kapitel: 5, titel: 'Übung: Große Ernte',
     desc: 'Übung: Ein 3×3-Feld im Zickzack bestellen und ernten – Schleifen-Spielerei!',
-    briefing: 'Ein <b>3×3-Acker</b>! Bestelle ihn im Zickzack – Reihe für Reihe, wie eine Schlange. Danach: warte(5), ernten, lagere(). Neun Felder voller Stolz!',
+    briefing: 'Ein <b>3×3-Acker</b>! Bestelle ihn im Zickzack – Reihe für Reihe wie im Schlangenweg. Danach: warte(5), ernten, lagere(). Neun Felder voller Stolz!',
     map: [
       'hhhhhhhhhhh',
       'h.k.......h',
@@ -9329,7 +9440,7 @@ const LEVELS = [
       {text: 'Die Kiste liegt nordwestlich bei (2,1): nach Norden laufen, dann 1 Feld west, lagere().', manual: true}
     ],
     chips: ['pflüge()', 'pflanze_weizen()', 'warte(5)', 'ernte()', 'lagere()', 'for i in range(3):\n    ...'],
-    startCode: '# Du startest auf Feld (3,3): Zeile für Zeile wie ein Drucker!\n\n',
+    startCode: '# Du startest auf Feld (3,3): Reihe für Reihe im Zickzack!\n\n',
     loesung: 'for i in range(3):\n    pflüge()\n    pflanze_weizen()\n    gehe_vorwärts()\ndrehe_rechts()\ngehe_vorwärts()\ndrehe_rechts()\ngehe_vorwärts()\nfor i in range(3):\n    pflüge()\n    pflanze_weizen()\n    gehe_vorwärts()\ndrehe_links()\ngehe_vorwärts()\ndrehe_links()\ngehe_vorwärts()\nfor i in range(2):\n    pflüge()\n    pflanze_weizen()\n    gehe_vorwärts()\npflüge()\npflanze_weizen()\nwarte(5)\nernte()\ndrehe_rechts()\ndrehe_rechts()\nfor i in range(2):\n    gehe_vorwärts()\n    ernte()\ndrehe_rechts()\ngehe_vorwärts()\nernte()\ndrehe_rechts()\nfor i in range(2):\n    gehe_vorwärts()\n    ernte()\ndrehe_links()\ngehe_vorwärts()\nernte()\ndrehe_links()\nfor i in range(2):\n    gehe_vorwärts()\n    ernte()\ndrehe_rechts()\nfor i in range(2):\n    gehe_vorwärts()\ndrehe_links()\ngehe_vorwärts()\nlagere()',
     hinweise: [
       'Zeile 1 (Reihe 3) ost, Zeile 2 (Reihe 4) west, Zeile 3 (Reihe 5) ost – Zickzack!',
@@ -9641,7 +9752,7 @@ const LEVELS = [
     loesung: 'Eine Maschine, ZWEI Fenster (beide mit while True-Dauerbetrieb):\n\nFENSTER 1 "Ernte":\nwhile True:\n    b = was_ist_hier()\n    if b == \'dreck\':\n        pflüge_hier()\n    if b == \'ackerboden\':\n        pflanze_hier()\n    if b == \'weizen_reif\':\n        ernte_hier()\n    warte(1)\n\nFENSTER 2 "Blinklicht":\nwhile True:\n    lampen_farbe(\'gelb\')\n    warte(1)\n    lampen_farbe(\'aus\')\n    warte(1)\n\nSCHRITTE: Block bauen → Fenster 1 anlegen, Code einfügen → "+ Codefenster\nhinzufügen" → Fenster 2 mit dem Blink-Code → Speichern → Maschine auf den\nAcker setzen (Inventar) → anklicken zum Einschalten. Fenster 1 erntet die\n4+ Weizen, Fenster 2 blinkt parallel dazu – beides läuft GLEICHZEITIG!',
     hinweise: [
       'Beide Fenster brauchen while True – dann wiederholen sie sich endlos, bis du ausschaltest.',
-      'Die Maschine muss auf einem Acker-Feld stehen (Erde oder Ackerboden): sie bearbeitet ihr eigenes Feld.',
+      'Die Maschine muss auf einem Acker-Feld stehen (d or Acker): sie bearbeitet ihr eigenes Feld.',
       'Eingeschaltete Maschinen klickst du einfach an – das Menü hat Einschalten/Ausschalten.'
     ],
     allowMachines: true,
@@ -9858,7 +9969,7 @@ const LEVELS = [
     ],
     bonus: {id:'b1', text:'Die Liste enthält mindestens 7 Einträge.', check: S => ((S.code.match(/"(v|r|l)"/g) || []).length >= 7)},
     tutorial: [
-      {text: 'Plane die Route: 3 ost → drehe_rechts (Süd) → 3 süd – fertig, dann steht die Figur AUF dem Ziel. Schau genau auf die Karte: Start (2,2), Ziel (5,5).', manual: true},
+      {text: 'Plane die Route: 3 ost → drehe_rechts (Süd) → 3 süd – fertig! Schau genau auf die Karte: Ziel bei (5,5), Start (2,2).', manual: true},
       {text: 'Schreibe <span class="kbd">route = ["v","v","v","r","v","v","v"]</span> – "v" = vorwärts, "r" = rechts. Die Figur hält AUF dem Ziel an!', manual: true},
       {text: 'Dann: <span class="kbd">for s in route:</span> mit if s == "v": gehe_vorwärts() … elif s == "r": drehe_rechts() … else: drehe_links().', manual: true}
     ],
@@ -9866,7 +9977,7 @@ const LEVELS = [
     startCode: '# Die ganze Route in EINER Liste!\nroute = []\n\n# for s in route: ...\n',
     loesung: 'route = ["v", "v", "v", "r", "v", "v", "v"]\nfor s in route:\n    if s == "v":\n        gehe_vorwärts()\n    elif s == "r":\n        drehe_rechts()\n    else:\n        drehe_links()',
     hinweise: [
-      'Start (2,2) schaut nach OSTEN. Ziel (5,5): 3 nach Osten, rechts drehen, 3 nach Süden – die Figur steht dann AUF dem Ziel.',
+      'Start (1,1) schaut nach OSTEN. Ziel (4,4): 3 nach Osten, rechts drehen, 3 nach Süden – die Figur steht dann AUF dem Ziel.',
       '"r" und "l" im Code behandeln die Drehungen, "v" den Schritt.',
       'Achte auf die Einrückung innerhalb der for-Schleife.'
     ],
@@ -10462,7 +10573,7 @@ const LEVELS = [
       {text: 'Beobachte die Truhe (anklicken!): der Haufen wandert Fächer für Fach in den Kasten. Ziel: saat / essen / edel / lager – alles sauber verstaut.', manual: true}
     ],
     chips: ['kiste_items()', "sortiere_item('eisen', 'edel')", "if 'saat' in item['tags']:\n    ...", 'for item in kiste_items():\n    ...'],
-    startCode: '# Die Sortier-Maschine wird in der WERKSTATT gebaut\n# (goldener Knopf "Maschine bauen"). Ihr Codefenster bekommt:\n#\n# kiste_items()   -> Liste von Wörterbüchern: item[\'id\'], item[\'tags\'], item[\'fach\']\n# sortiere_item(id, fach)   -> Ware in ein Fach einsortieren\n#\n# Faächer in diesem Level: saat · essen · edel · lager\n\n',
+    startCode: '# Die Sortier-Maschine wird in der WERKSTATT gebaut\n# (goldener Knopf "Maschine bauen"). Ihr Codefenster bekommt:\n#\n# kiste_items()   -> Liste von Wörterbüchern: item[\'id\'], item[\'tags\'], item[\'fach\']\n# sortiere_item(id, fach)   -> Ware in ein Fach einsortieren\n#\n# Fächer in diesem Level: saat · essen · edel · lager\n\n',
     loesungIstMaschinen: true,
     loesung: "SORTIER-MASCHINE (Fenster \"Sortierung\"):\n\nwhile True:\n    for item in kiste_items():\n        if 'saat' in item['tags']:\n            sortiere_item(item['id'], 'saat')\n        elif 'essen' in item['tags']:\n            sortiere_item(item['id'], 'essen')\n        elif 'edel' in item['tags']:\n            sortiere_item(item['id'], 'edel')\n        else:\n            sortiere_item(item['id'], 'lager')\n    warte(1)\n\nSCHRITTE:\n1) Goldener Knopf \"Maschine bauen\" -> Namen, Textur, Codefenster.\n2) Programm einfügen, speichern.\n3) Maschine DIREKT NEBEN die Truhe stellen (Abstand max. 1 Feld).\n4) Maschine anklicken -> einschalten. Truhe anklicken zeigt die Fächer.\n\nPRIORITÄT: Körner tragen saat UND essen - 'saat' muss VOR 'essen' geprüft\nwerden, sonst landen die Körner im falschen Fach (if/elif-Kette!).",
     hinweise: [
@@ -10479,7 +10590,7 @@ const LEVELS = [
   {
     id: 's2', kapitel: 10, titel: 'Die Bergbau-Maschine',
     desc: 'abbaue_hier() baut ALLES ab, was unter der Maschine liegt – Erz, Sand, sogar gesetzte Blöcke. Endliches Inventar: entleere_in_kiste(1) programmiert die Entleerung!',
-    briefing: 'Die Erntemaschine kennst du – heute tauscht sie die Sichel gegen die <b>Spitzhacke</b>! Erfinderin Edes <b>Bergbau-Roboter</b> baut mit <span class="kbd">abbaue_hier()</span> EINFACH ALLES ab, was unter ihr liegt – Erz, Sand, Holz, sogar Glas (keine Block-Abfrage nötig). Dein Rezept: derselbe Schlangenlinien wie bei der Erntemaschine. Neu: Das <b>Inventar ist endlich (16 Plätze)</b> – ist es voll, sammelt die Maschine nichts mehr ein. Das <b>Entleeren wird programmiert</b>: <span class="kbd">entleere_in_kiste(1)</span> leert das Inventar in die Truhe am Südrand (<b>Kiste #1</b>) – aber nur, wenn die Maschine direkt daneben steht. Feldgröße: b = 9 Spalten, h = 5 Reihen. Stelle die Maschine oben links ins Feld!',
+    briefing: 'Die Erntemaschine kennst du – heute tauscht sie die Sichel gegen die <b>Spitzhacke</b>! Erfinderin Ede testet hier ihren <b>Bergbau-Roboter</b>: <span class="kbd">abbaue_hier()</span> baut den Block UNTER der Maschine wirklich ab und sammelt ihn ein – Erz, Sand, Holz, sogar Glas. Dein Rezept: derselbe Schlangenlinien wie bei der Ernte. Wichtig: Das <b>Inventar ist endlich (16 Plätze)</b> – voll heißt: erstmal nichts mehr drin. Das <b>Entleeren wird programmiert</b>: die Truhe unten am Feld ist <b>Kiste #1</b> – <span class="kbd">entleere_in_kiste(1)</span> leert das Inventar hinein, sobald die Maschine direkt daneben steht. Feldgröße: b = 9 Spalten, h = 5 Reihen. Stelle die Maschine oben links ins Feld!',
     map: [
       'hhhhhhhhhhh',
       'hccbbbbcebh',
@@ -10627,16 +10738,17 @@ function fachOk(x, y, ids, fach){
 
    Aufbau (stetige Progression, jedes Kapitel kombiniert das Gelernte):
    1 Grundlagen & Schleifen   – gehen, drehen, for-Schleifen
-   2 Schleifen & Entscheidungen – while True, Sensoren, if/elif/else
-   3 Funktionen & Variablen   – while+break, Variablen, def, Definitionen-Tab;
+   2 Entscheidungen           – Sensoren, if/else, while
+   3 Funktionen & Variablen   – FRÜH: def, Variablen, Definitionen-Tab;
                                 direkt anwenden in Schlangenlinie & Labyrinth
-   4 Bauen & Brücken          – platziere(), Brücken über die SCHLUCHT
-   5 Listen & Rechnen         – Listen als Route, wiegen & sortieren, Blockturm
-   6 Die Farm                 – pflügen, säen, ernten, lagern
-   7 Maschinen                – Reihen-Feld, def-Baustein, Werkstatt, Erntemaschine
-   8 Meisterklasse            – generalisierte KI auf Zufalls-Welten
-   9 Zufalls-Parcours         – Grab- & Turm-Übungen (🎲)
-   10 Sortieren, Bergbau & 3D-Druck – s1–s3
+   4 Höhen & Tiefen           – Treppen, Wasserfall, Erzberg, Stollen
+   5 Listen & Mathematik      – Listen als Route, Sortieren, Rechnen, Turm
+   6 Bauen & Brücken          – platziere(), Brücken über die SCHLUCHT
+   7 Die Farm                 – pflügen, säen, ernten, lagern
+   8 Maschinen                – Werkstatt, Fenster, Kettenreaktion
+   9 Meisterklasse            – generalisierte KI auf Zufalls-Welten
+   10 Sandbox                 – freie Welt
+   11 Maschinen-Meister      – Sortier-, Bergbau-Maschinen & 3D-Drucker
 
    🎲 = Zufalls-Layout (randomize): bei JEDEM Start neues Layout – dort
    gewinnt nur allgemeiner Code (Sensoren/while), kein "auswendig gelernter"
@@ -11710,6 +11822,7 @@ const HUB = {
   loop(now){
     const dt = Math.min(0.05, (now - this.lastT) / 1000);
     this.lastT = now;
+    GRAFIK.tick(now);              // Framerate messen (Auto-Pilot)
     this.t += dt;
     const w = this.world;
     if (!w){ this.raf = null; return; }
@@ -11834,11 +11947,12 @@ const HUB = {
     RND.easeCam(dt);
     // Zeichnen: Ego-Ansicht (First-Person) oder Iso-Kartenansicht
     if (EGO.on){
-      EGO.draw(w, this.t, dt);
+      if (GRAFIK.duerfZeichnen()) EGO.draw(w, this.t, dt);
       const egoHintEl = U.$('#hub-hint');
-      if (egoHintEl) egoHintEl.innerHTML = this.egoHint();
+      if (egoHintEl){ const hE = this.egoHint(); if (egoHintEl._t !== hE){ egoHintEl._t = hE; egoHintEl.innerHTML = hE; } }
     }
     else {
+    if (GRAFIK.duerfZeichnen()){        // Dialog offen: Welt nur jedes 3. Frame
     RND.draw(w, this.t);
     const ctx = RND.ctx;
     const zoom = RND.cam.zoom;
@@ -11877,19 +11991,24 @@ const HUB = {
       ctx.beginPath(); ctx.ellipse(s.x, s.y + TH * 0.5 * zoom, 5 * zoom, 2 * zoom, 0, 0, 7); ctx.fill();
       SPR.biene(ctx, s.x, s.y + TH * 0.5 * zoom - 26 * zoom + hover, this.t, b.ph);
     }
-    // Hinweiszeile
-    const hint = U.$('#hub-hint');
-    if (hint){
-      if (this.nearBook()) hint.innerHTML = '📖 <b>E</b> / Enter / Klick – das große Buch öffnen';
-      else if (this.nearWerk()) hint.innerHTML = '🔬 <b>E</b> – Forschung: Technologien freischalten';
-      else if (this.bettNear()) hint.innerHTML = '🌙 <b>E</b> – im Traum-Bett schlafen (Nacht-Level träumen!)';
-      else if (this.nearVillager()) hint.innerHTML = '🧑‍🌾 <b>E</b> – mit dem Dorfbewohner sprechen (Aufgaben!)';
-      else if (this.nearChest()) hint.innerHTML = '📦 <b>E</b> / Klick – die Kiste öffnen (Inhalt: wild durcheinander!)';
-      else hint.innerHTML = '';   // Steuerungs-Erklärbalken entfernt – die
-                                  // kontextabhängigen Knöpfe unten rechts erklären sich selbst
     }
     }
+    this.hinweiszeile();
     this.raf = requestAnimationFrame(ts => this.loop(ts));
+  },
+
+  /* Hinweiszeile über der Welt – nur bei Textänderung ins DOM schreiben
+     (jeden Frame innerHTML setzen erzeugt Layout-Arbeit auf schwachen PCs). */
+  hinweiszeile(){
+    const hint = U.$('#hub-hint');
+    if (!hint) return;
+    let txt = '';
+    if (this.nearBook()) txt = '📖 <b>E</b> / Enter / Klick – das große Buch öffnen';
+    else if (this.nearWerk()) txt = '🔬 <b>E</b> – Forschung: Technologien freischalten';
+    else if (this.bettNear()) txt = '🌙 <b>E</b> – im Traum-Bett schlafen (Nacht-Level träumen!)';
+    else if (this.nearVillager()) txt = '🧑‍🌾 <b>E</b> – mit dem Dorfbewohner sprechen (Aufgaben!)';
+    else if (this.nearChest()) txt = '📦 <b>E</b> / Klick – die Kiste öffnen (Inhalt: wild durcheinander!)';
+    if (hint._t !== txt){ hint._t = txt; hint.innerHTML = txt; }
   },
 
   /* ============ Flüssige Bewegung ============ */
@@ -15680,6 +15799,24 @@ const Game = {
     });
   },
 
+  /* Dauerlauf-Level: die Truhe erscheint erst nach N gelaufenen Runden
+     (1 Runde = 20 erfolgreiche Schritte auf dem Rundweg). doMove() ruft
+     dies nach jedem erfolgreichen Vorwärtsschritt auf. */
+  truheRundenTick(){
+    const lvl = this.level, w = this.world;
+    if (!lvl || !lvl.truheAbRunden || !w || w._truheDa) return;
+    w._rundenSchritte = (w._rundenSchritte || 0) + 1;
+    if (Math.floor(w._rundenSchritte / 20) < lvl.truheAbRunden) return;
+    w._truheDa = true;
+    const at = lvl.truheAt || {x: 4, y: 1};
+    const it = {typ: 'truhe', x: at.x, y: at.y, kistId: 1 + w.items.filter(i2 => i2.typ === 'truhe' || i2.typ === 'kistegross').length};
+    w.items.push(it);
+    SFX.collect();
+    RND.burst(it.x, it.y, '#e8b64a', 14);
+    RND.floatText(it.x, it.y, 'Die Schatztruhe erscheint!', '#ffd54a');
+    w.bubble(w.player, 'Nach ' + lvl.truheAbRunden + ' ganzen Runden ist die Truhe da – sammle() nimmt sie mit!');
+  },
+
   /* ---------- Hauptschleife ---------- */
   startLoop(){
     if (this.raf) cancelAnimationFrame(this.raf);
@@ -15690,6 +15827,7 @@ const Game = {
       // Maschinen-Animationen, Wachstum – alles folgt dem Zeitfaktor)
       const dtRaw = Math.min(0.05, (now - this.lastT) / 1000);
       this.lastT = now;
+      GRAFIK.tick(now);              // Framerate messen (Auto-Pilot)
       const dt = Math.min(0.3, dtRaw * (ZEIT.faktor || 1));
       this.t += dt;
       const w = this.world;
@@ -15736,9 +15874,12 @@ const Game = {
       if (this.level && this.level.nacht){
         NACHT.tick(w, dt);
         const np = U.$('#nacht-panel');
-        if (np && np.style.display !== 'none') np.innerHTML = NACHT.statusHtml(w);
+        if (np && np.style.display !== 'none'){
+          const hN = NACHT.statusHtml(w);
+          if (np._h !== hN){ np._h = hN; np.innerHTML = hN; }
+        }
       }
-      RND.draw(w, this.t);
+      if (GRAFIK.duerfZeichnen()) RND.draw(w, this.t);   // Dialog offen: seltener zeichnen
       if (this.hudDirty){ this.syncHud(); this.hudDirty = false; }
       this.raf = requestAnimationFrame(loop);
     };
@@ -16981,7 +17122,7 @@ const MachMgr = {
     wb.style.margin = '10px 8px 10px 0';
     wb.onclick = ()=>{ SFX.click(); App.closeWin('win-masch'); MachEd.open(null); };
     box.appendChild(wb);
-    const vorl = U.el('button', 'btn', '📋 Aus Vorlage (Ofen, Fabrik, Bienenstock …)');
+    const vorl = U.el('button', 'btn', '📋 Aus Vorlage (Fabrik, Bienenstock, Roboter …)');
     vorl.style.margin = '10px 0';
     vorl.onclick = ()=>{ SFX.click(); App.closeWin('win-masch'); MachEd.open(null); MachEd.openVorlagen(); };
     box.appendChild(vorl);
@@ -17913,7 +18054,8 @@ const FN_WERTE = {
   fach_von:        ['fach', 'Fach der Ware'],
   hat_tag:         ['ja_nein', 'Antwort der Tag-Prüfung'],
   hat_leiter:      ['ja_nein', 'Antwort: Leiter vor dir?'],
-  hat_koerner:     ['ja_nein', 'Antwort: Körner da?']
+  hat_koerner:     ['ja_nein', 'Antwort: Körner da?'],
+  hat_brennstoff:  ['ja_nein', 'Antwort: Brennstoff da?']
 };
 
 const AutoVerv = {
@@ -18209,7 +18351,7 @@ const GLOSSAR_DATA = [
     kurz:'Fragt nach, in welchem Fach die Items einer ID gerade liegen (None = noch wild durcheinander). Nützlich, um nur unsortierte Items umzuräumen.',
     ex:"if fach_von('eisen') != 'edel':\n    sortiere_item('eisen', 'edel')"},
   {kat:'Maschinen & Sortierung', name:'handwerk(...)', sig:"handwerk('bretter') → True/False (nur Maschinen)",
-    kurz:'Handwerks-System zum Programmieren: fertigt EIN Rezept an. Die Zutaten fehlen aus der Kiste neben der Maschine, das Ergebnis landet IN der Kiste. Rezepte (Art): bretter, truhe, teppich, kerze, brot, kabel, tor, trichter, beobachter, pumpe, lampe (Werkbank) und braten, glas, eisen, gold, kohle (Ofen).',
+    kurz:'Handwerks-System zum Programmieren: fertigt EIN Rezept an. Die Zutaten kommen aus der Kiste neben der Maschine, das Ergebnis landet IN der Kiste. Rezepte (Art): bretter, truhe, teppich, kerze, brot, lampe (Werkbank).',
     ex:"if kiste_anzahl('holz') >= 1:\n    handwerk('bretter')"},
   {kat:'Maschinen & Sortierung', name:'rezepte()', sig:'rezepte() → Liste (nur Maschinen)',
     kurz:'Listet alle Rezepte auf – jedes als Wörterbuch mit name, art (ofen/werkbank), braucht (Zutaten) und ergibt (Ergebnis). Damit kannst du Fabriken bauen, die selbst prüfen, was sie herstellen können.',
@@ -18527,54 +18669,6 @@ const FABRIK_REZEPTE = {
 
 /* ---------- Maschinen-Vorlagen: fertige Maschinen zum Auswählen ---------- */
 const MACH_VORLAGEN = [
-  {id:'ofen', name:'Ofen', tex:'stein', icon:'🔥',
-   beschreibung:'Programmierbarer Ofen: schmelze(\'eisen\') schmilzt EIN Rezept – 1 Brennstoff (Kohle/Holz) aus der Tasche, Zutaten aus der Truhe daneben, das fertige Produkt wird automatisch zurück in die Truhe verstaut. Der Beispiel-Code prüft den Brennstoff, holt ihn bei Bedarf aus der Truhe, meldet Fehlbestand und schmilzt je nach Vorrat das passende Rezept.',
-   code:`# OFEN – vollständiges Schmelz-Programm
-# Zutaten & Produkte liegen in der Truhe daneben.
-
-def hat_brennstoff():
-    # Habe ich gerade Brennstoff (Kohle oder Holz) in der Tasche?
-    return mein_gut() == 'kohle' or mein_gut() == 'holz'
-
-def brennstoff_holen():
-    # 1. Erst in der eigenen Tasche nachsehen
-    if hat_brennstoff():
-        return True
-    # 2. Nichts da? Kohle aus der Truhe daneben holen
-    if kiste_anzahl('kohle') > 0:
-        kiste_nimm('kohle', 1)
-        return True
-    # 3. Notfalls Holz als Brennstoff nehmen
-    if kiste_anzahl('holz') > 0:
-        kiste_nimm('holz', 1)
-        return True
-    # 4. Auch leer? Nachricht schreiben – ohne Brennstoff wird nicht geschmolzen
-    sage('Kein Brennstoff vorhanden! Bitte Kohle oder Holz in die Truhe legen.')
-    return False
-
-def schmelze_was_da_ist():
-    # Je nachdem, was in der Truhe liegt, wird etwas anderes geschmolzen
-    if kiste_anzahl('erz_eisen') > 0:
-        return schmelze('eisen')
-    if kiste_anzahl('erz_gold') > 0:
-        return schmelze('gold')
-    if kiste_anzahl('sand') >= 2:
-        return schmelze('glas')
-    if kiste_anzahl('rohfleisch') > 0:
-        return schmelze('braten')
-    if kiste_anzahl('holz') >= 3:
-        return schmelze('kohle')          # aus 2 Holz wird Kohle gebrannt
-    sage('Nichts zu schmelzen gefunden – Truhe auffüllen!')
-    return False
-
-# Dauerbetrieb: Brennstoff besorgen -> schmelzen -> Produkt liegt in der Truhe
-while True:
-    if not brennstoff_holen():
-        warte(3)                       # leer laufen lassen, bis Brennstoff kommt
-    elif schmelze_was_da_ist():
-        sage('Fertig! Das Produkt liegt jetzt in der Truhe.')
-    warte(0.5)
-`},
   {id:'werkbank', name:'Werkbank', tex:'holz', icon:'🔨',
    beschreibung:'Handwerkert automatisch: Wolle → Teppich, Weizen → Brot, Leder → Lederhose. Truhe direkt daneben. Programmierbar: handwerk(\'brot\') fertigt ein Rezept, rezepte() zeigt alle, kiste_anzahl(\'holz\') prüft die Zutaten.',
    code:'# Werkbank: gezielt Rezepte herstellen\nwhile True:\n    if kiste_anzahl(\'holz\') >= 1:\n        handwerk(\'bretter\')\n    warte(1)\n'},
@@ -18599,9 +18693,6 @@ while True:
   {id:'baumaschine', name:'Baumaschine (3D-Druck)', tex:'gold', icon:'🏗️',
    beschreibung:'Fliegt und druckt Ebene für Ebene: fliege_hoch() hebt sie eine Ebene höher, setze_block(mat) druckt einen Block auf das Feld UNTER der schwebenden Maschine (aus dem Lager). Perfekt für Häuser: Ring drucken → fliege_hoch() → nächste Ebene.',
    code:'# Baumaschine: Boden-Ring aus Stein drucken\nfliege_hoch()\nfor seite in range(4):\n    for i in range(4):\n        setze_block(\'stein\')\n        gehe_vorwärts()\n    drehe_rechts()\n'},
-  {id:'waechter', name:'Tor-Wächter', tex:'quarz', icon:'🚪',
-   beschreibung:'Steuert Tore per Code: setze_tor(True) öffnet das Tor vor der Maschine, setze_tor(False) schließt es. Über Redstone-Kabel (mit der Werkstatt herstellen) steuert die Maschine auch TORE WEIT WEG: signal_setzen(True) schickt ein Signal durch alle verbundenen Kabel.',
-   code:'# Tor-Wächter: öffnet und schließt das Tor vor dir\nwhile True:\n    setze_tor(True)\n    warte(3)\n    setze_tor(False)\n    warte(3)\n'},
   {id:'ritter', name:'🤖 Roboter: Krieger', tex:'eisen', icon:'⚔️', rolle:'kaempfer', roboter:true,
    beschreibung:'NACHTMODUS-GRUNDTYP: Ein humanoider Kampfroboter (⚔ trägt das Schwert in der Hand – mit Lauf- & Schlag-Animation). Bewache die verwundeteste Kollegin (maschinen_info()), kämpfe am nächsten Gegner (greife_an()) und repariere dich in sicherer Pause (mein_leben() + repariere()).',
    code:`# ROBOTER: KRIEGER (Grundtyp – Grundmuster zum Coden):
@@ -19465,6 +19556,8 @@ const App = {
     if (p.nachtPreview === undefined) p.nachtPreview = false;
     if (p.nachtStatus === undefined) p.nachtStatus = {};
     if (p.bettAt === undefined) p.bettAt = null;
+    if (p.grafik === undefined) p.grafik = 'auto';            // auto/hoch/mittel/sparen
+    if (p.grafikAuto === undefined) p.grafikAuto = 'mittel';  // letzte Auto-Stufe (Auto-Pilot merkt sie sich)
   },
   /* Ein Computer = ein Spielstand. Die Schüler/innen sind mit ihrem Windows-
      Konto angemeldet, dadurch hat jedes Browser-Profil automatisch "seinen"
@@ -19737,6 +19830,94 @@ const App = {
     return true;
   },
 
+  /* Alle Musterlösungen auf einen Blick – NUR über das versteckte Lehrkraft-
+     Panel erreichbar (5× auf die Versionszeile in den Einstellungen klicken).
+     Mit Suchfeld, Statuszeile, Dorf-Aufgaben-Lösungen & Maschinen-Vorlagen. */
+  zeigeMusterloesungen(){
+    const frei = App.freigaben && App.freigaben.loesungen;
+    let html = '<div class="hint" style="margin-bottom:6px;">Status: ' + (frei
+      ? '<b style="color:#9be27a;">Musterlösungen sind FREIGEGEBEN</b> – Schüler/innen sehen im Level den !-Knopf.'
+      : 'Musterlösungen sind <b>GESPERRT</b> – Schüler/innen sehen nichts (Freigeben: Checkbox oben).') + '</div>' +
+      '<div class="hint" style="margin-bottom:6px;">Ansehen ist nicht Freigeben: dieses Fenster ist nur für dich sichtbar (verstecktes Lehrkraft-Panel).</div>' +
+      '<input type="text" id="muster-suche" placeholder="🔍 Suchen: Level-Titel, Kapitel oder Befehl (z. B. abbaue_hier)" style="width:100%; margin-bottom:8px;">';
+    let kap = null;
+    for (const lvl of LEVELS){
+      if (lvl.kapitel !== kap){
+        kap = lvl.kapitel;
+        html += '<h3 style="margin:12px 0 2px;">Kapitel ' + kap + (KAPITEL_TITEL[kap] ? ' · ' + KAPITEL_TITEL[kap] : '') + '</h3>';
+      }
+      const sol = (typeof lvl.loesung === 'string' && lvl.loesung) ? lvl.loesung : null;
+      const suche = (lvl.titel + ' kapitel ' + kap + ' ' + (sol || '')).toLowerCase().replace(/"/g, '');
+      html += '<div class="panel muster-item" style="margin-top:8px;" data-suche="' + U.escapeHtml(suche) + '">' +
+        '<b>' + U.escapeHtml(lvl.titel) + '</b>';
+      if (sol){
+        html += '<pre style="white-space:pre-wrap; margin:6px 0 8px;">' + U.escapeHtml(sol) + '</pre>' +
+          '<button class="btn small" data-lvl="' + lvl.id + '">📋 Kopieren</button>';
+      } else {
+        html += '<div class="hint" style="margin-top:4px;">Die Musterlösung steht in der Level-Anleitung (Maschinen-Code, wird in der Werkstatt programmiert).</div>';
+      }
+      html += '</div>';
+    }
+    const quests = (typeof HUB !== 'undefined' && HUB.QUESTS) ? HUB.QUESTS.filter(q => q.codeTipp) : [];
+    if (quests.length){
+      html += '<h3 style="margin:14px 0 2px;">Dorfaufgaben (Bruno · Stella · Ede)</h3>';
+      for (const q of quests){
+        const suche = (q.titel + ' ' + q.wer + ' dorfaufgabe ' + q.codeTipp).toLowerCase().replace(/"/g, '');
+        html += '<div class="panel muster-item" style="margin-top:8px;" data-suche="' + U.escapeHtml(suche) + '">' +
+          '<b>' + U.escapeHtml(q.titel) + '</b> <span class="hint">(' + U.escapeHtml(q.wer) + ')</span>' +
+          '<pre style="white-space:pre-wrap; margin:6px 0 8px;">' + U.escapeHtml(q.codeTipp) + '</pre>' +
+          '<button class="btn small" data-quest="' + q.id + '">📋 Kopieren</button></div>';
+      }
+    }
+    if (typeof MACH_VORLAGEN !== 'undefined' && MACH_VORLAGEN.length){
+      html += '<h3 style="margin:14px 0 2px;">Maschinen-Vorlagen (inkl. Code)</h3>';
+      for (const v of MACH_VORLAGEN){
+        const suche = (v.name + ' maschinenvorlage ' + v.code).toLowerCase().replace(/"/g, '');
+        html += '<div class="panel muster-item" style="margin-top:8px;" data-suche="' + U.escapeHtml(suche) + '">' +
+          '<b>' + (v.icon || '⚙') + ' ' + U.escapeHtml(v.name) + '</b>' +
+          '<pre style="white-space:pre-wrap; margin:6px 0 8px;">' + U.escapeHtml(v.code) + '</pre>' +
+          '<button class="btn small" data-vorlage="' + v.id + '">📋 Kopieren</button></div>';
+      }
+    }
+    this.modal({
+      title: '📖 Musterlösungen (nur Lehrkraft)',
+      body: html,
+      buttons: [{label: 'Fertig', primary: true, fn: ()=>{}}]
+    });
+    U.$('#modal-root').querySelectorAll('[data-lvl]').forEach(btn => {
+      btn.onclick = ()=>{
+        const lvl = LEVELS.find(l => l.id === btn.dataset.lvl);
+        if (lvl) U.copyText(lvl.loesung, ()=> this.toast('Musterlösung kopiert – im Editor einfügen (Strg+V).', 'ok'));
+      };
+    });
+    U.$('#modal-root').querySelectorAll('[data-quest]').forEach(btn => {
+      btn.onclick = ()=>{
+        const q = (HUB.QUESTS || []).find(x => x.id === btn.dataset.quest);
+        if (q) U.copyText(q.codeTipp, ()=> this.toast('Code-Tipp kopiert.', 'ok'));
+      };
+    });
+    U.$('#modal-root').querySelectorAll('[data-vorlage]').forEach(btn => {
+      btn.onclick = ()=>{
+        const v = MACH_VORLAGEN.find(x => x.id === btn.dataset.vorlage);
+        if (v) U.copyText(v.code, ()=> this.toast('Vorlagen-Code kopiert.', 'ok'));
+      };
+    });
+    const suche = U.$('#muster-suche');
+    if (suche) suche.oninput = ()=>{
+      const q = suche.value.trim().toLowerCase();
+      U.$('#modal-root').querySelectorAll('.muster-item').forEach(el => {
+        el.style.display = (!q || (el.dataset.suche || '').indexOf(q) >= 0) ? '' : 'none';
+      });
+    };
+  },
+
+  /* Grafik-Stufen-Auswahl fürs Einstellungen-Fenster */
+  grafikButtons(){
+    const wahl = this.profile.grafik || 'auto';
+    const opts = [['auto', '🚀 Auto (empfohlen)'], ['hoch', '✨ Hoch'], ['mittel', '🌤 Mittel'], ['sparen', '🪫 Sparmodus']];
+    return opts.map(o => '<button class="btn small' + (wahl === o[0] ? ' gold' : '') + '" data-grafik="' + o[0] + '">' + o[1] + '</button>').join('');
+  },
+
   openOptionen(){
     SFX.click();
     const b = this.bindungen();
@@ -19754,6 +19935,10 @@ const App = {
         '<div style="margin-top:10px;"><button class="btn small" id="btn-opt-reset">↺ Steuerung zurücksetzen</button></div>' +
         '<h3 style="margin-top:18px;">Anzeige</h3>' +
         '<label style="display:flex; gap:8px; align-items:center; cursor:pointer;"><input type="checkbox" id="opt-nacht"' + nacht + '> 🌙 Nachtmodus-Vorschau (dunkles Licht – Vorbereitung auf den Verteidigungs-Nachtmodus)</label>' +
+        '<h3 style="margin-top:18px;">Grafik &amp; Tempo <span style="font-weight:normal; font-size:11px; opacity:.7;">(ruckelt es? hier senken!)</span></h3>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap;">' + this.grafikButtons() + '</div>' +
+        '<div class="hint" id="grafik-status" style="margin-top:6px;">' + GRAFIK.statusHtml() + '</div>' +
+        '<div class="hint" style="margin-top:4px;">Schwacher Rechner? „Auto“ senkt die Grafik selbsttätig, bis das Spiel ruckelfrei läuft – auf Schul-PCs meist „Sparmodus“. Das Spiel bleibt dasselbe, es sieht nur etwas einfacher aus.</div>' +
         '<h3 style="margin-top:18px;">Ton</h3>' +
         '<button class="btn small" id="btn-opt-sound">' + (SFX.muted ? '🔇 Ton einschalten' : '🔊 Ton ausschalten') + '</button>' +
         // Die früheren Welt-Knöpfe (? / 🛠 / 🔊 / 🌍 / 👁) leben jetzt HIER:
@@ -19776,7 +19961,7 @@ const App = {
         '<h3 style="margin-top:0;">🔒 Lehrkraft-Optionen</h3>' +
         '<label style="display:flex; gap:8px; align-items:center; cursor:pointer; margin:4px 0;"><input type="checkbox" id="opt-loesungen"> Musterlösungen freigeben (im Level erscheint der !-Knopf)</label>' +
         '<label style="display:flex; gap:8px; align-items:center; cursor:pointer; margin:4px 0;"><input type="checkbox" id="opt-allelevel"> Alle Level freischalten (Weltkarte ohne Sperren)</label>' +
-        '<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;"><button class="btn small" id="opt-loesungen-ansehen">📖 Musterlösungen ansehen</button></div>' +
+        '<button class="btn small" id="btn-opt-muster" style="margin-top:8px;">📖 Alle Musterlösungen ansehen</button>' +
         '<div class="hint" style="margin-top:6px;">Gilt nur auf diesem Computer und wird nicht in Fortschritt-Dateien gespeichert. Zum Ein-/Ausblenden: 5× auf die Versionszeile klicken.</div>' +
         '</div>' +
         '</div>',
@@ -19799,6 +19984,18 @@ const App = {
         window.addEventListener('keydown', fangen, true);
       };
     });
+    U.$('#modal-root').querySelectorAll('[data-grafik]').forEach(btn => {
+      btn.onclick = ()=>{
+        this.profile.grafik = btn.dataset.grafik;
+        this.saveProfile();
+        GRAFIK.setFromProfile();
+        this.toast(btn.dataset.grafik === 'auto' ? 'Grafik: Auto – das Spiel passt die Stufe selbst an.' : 'Grafik auf „' + GRAFIK.eff().name + '“ gesetzt.', 'ok');
+        this.openOptionen();
+      };
+    });
+    GRAFIK._ui = ()=>{ const el = U.$('#grafik-status'); if (el) el.innerHTML = GRAFIK.statusHtml(); };
+    const mb = U.$('#btn-opt-muster');
+    if (mb) mb.onclick = ()=>{ SFX.click(); this.zeigeMusterloesungen(); };
     const rb = U.$('#btn-opt-reset');
     if (rb) rb.onclick = ()=>{ this.profile.bindings = {}; this.saveProfile(); if (typeof HUB !== 'undefined' && HUB.aktualisiereAktionsLabels) HUB.aktualisiereAktionsLabels(); this.toast('Steuerung zurückgesetzt.', 'sys'); this.openOptionen(); };
     const nb = U.$('#opt-nacht');
@@ -19869,8 +20066,6 @@ const App = {
         this.toast(oa.checked ? 'Alle Level freigeschaltet.' : 'Level-Sperren aktiv – Levels schalten sich der Reihe nach frei.', oa.checked ? 'ok' : 'sys');
       };
     }
-    const mlb = U.$('#opt-loesungen-ansehen');
-    if (mlb) mlb.onclick = ()=> this.openMusterLoesungen();
     // ?-Hilfe (das Willkommens-/Steuerungs-Info, früher der ?-Knopf in der Welt)
     const ib = U.$('#btn-opt-info');
     if (ib) ib.onclick = ()=>{ SFX.click(); if (typeof HUB !== 'undefined' && HUB.zeigeInfo) HUB.zeigeInfo(); };
@@ -19917,106 +20112,6 @@ const App = {
      Computer und wird NICHT in Fortschritt-Dateien exportiert. */
   darfLoesung(){
     return !!(this.freigaben && this.freigaben.loesungen);
-  },
-
-  /* ---------- Musterlösungen-Übersicht (versteckt in den Einstellungen) ----------
-     Nur für die Lehrkraft: alle Level-Lösungen nach Kapiteln, die Maschinen-
-     Vorlagen, die Dorfaufgaben-Lösungen und die Maschinen-Level – mit Suchfeld.
-     ANSEHEN ist nicht FREIGEBEN: Schüler/innen sehen weiter nichts, solange
-     „Musterlösungen freigeben" im Lehrkraft-Panel aus ist. */
-  mlHtml(suche){
-    suche = (suche || '').toLowerCase();
-    const T = (s)=> String(s || '').toLowerCase().includes(suche);
-    const out = [];
-    out.push('<div class="hint" style="margin:2px 0 10px 0;">Ansehen ist nicht Freigeben: Schüler/innen sehen die Lösungen erst, wenn im Lehrkraft-Panel <b>„Musterlösungen freigeben“</b> angehakt ist. Aktuell: <b>' + (this.freigaben.loesungen ? 'freigegeben' : 'gesperrt') + '</b>.</div>');
-    /* Level-Lösungen, gruppiert nach Kapiteln */
-    let lastKap = null, nLvl = 0, hLvl = '';
-    for (const lvl of LEVELS){
-      const hatText = typeof lvl.loesung === 'string' && lvl.loesung && !lvl.loesung.startsWith('Maschinen-Code');
-      if (suche && !(T(lvl.titel) || T(lvl.loesung) || T(String(lvl.kapitel)))) continue;
-      nLvl++;
-      if (lvl.kapitel !== lastKap){
-        hLvl += '<h3 style="margin-top:12px;">Kapitel ' + lvl.kapitel + (KAPITEL_TITEL[lvl.kapitel] ? ' · ' + KAPITEL_TITEL[lvl.kapitel] : '') + '</h3>';
-        lastKap = lvl.kapitel;
-      }
-      let inner = '<h4 style="color:var(--green); margin-top:0;">' + lvl.kapitel + ' · ' + U.escapeHtml(lvl.titel) + '</h4>';
-      inner += hatText ? '<pre>' + U.escapeHtml(lvl.loesung) + '</pre>'
-        : '<div class="hint">Musterlösung steht in der Anleitung des Levels (z. B. Maschinen-Code).</div>';
-      hLvl += '<div class="panel" style="margin-top:10px;">' + inner + '</div>';
-    }
-    out.push(nLvl ? hLvl : '<div class="hint">Kein Level gefunden.</div>');
-    /* Maschinen-Vorlagen */
-    const vor = MACH_VORLAGEN.filter(v => !suche || T(v.name) || T(v.beschreibung) || T(v.code));
-    if (vor.length){
-      let hVor = '<h3 style="margin-top:20px;">Vorschlagslösungen für Maschinen</h3>' +
-        '<p class="hint" style="margin:6px 0;">Diese Maschinen stehen Schüler/innen als <b>Vorlagen</b> zur Verfügung (Maschinen-Übersicht → „Aus Vorlage“) – die Codes kannst du hier vergleichen oder im Unterricht besprechen.</p>';
-      for (const v of vor){
-        hVor += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--green);">' + v.icon + ' ' + U.escapeHtml(v.name) + '</h4>' +
-          '<div class="hint" style="margin:4px 0;">' + U.escapeHtml(v.beschreibung) + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
-      }
-      out.push(hVor);
-    }
-    /* Maschinen der Dorfbewohner */
-    const villagerLoesungen = [
-      {wer: 'Bauer Bruno – Farmautomatik (Tech: Farmautomatik)',
-       aufgabe: 'Eine Maschine, deren Code pflanze_hier() UND ernte_hier() benutzt.',
-       code: 'while True:\n    feld = was_ist_hier()\n    if feld == \'ackerboden\':\n        pflanze_hier()\n    elif feld == \'weizen_reif\':\n        ernte_hier()\n    warte(0.5)\n\n# Variante mit Bewegung: die Maschine läuft den Acker entlang:\n# for i in range(4):\n#     gehe_vorwärts()\n#     pflanze_hier()'},
-      {wer: 'Schmiedin Stella – Sortiererin (Tech: Sortiertechnik)',
-       aufgabe: 'Die chaotische Kiste in Fächer einsortieren (edel / allgemein / essen …).',
-       code: 'while True:\n    for item in kiste_items():\n        if item["fach"] is None:\n            if "edel" in item["tags"]:\n                sortiere_item(item["id"], "edel")\n            elif "essen" in item["tags"]:\n                sortiere_item(item["id"], "essen")\n            else:\n                sortiere_item(item["id"], "allgemein")\n    warte(1)\n'},
-      {wer: 'Erfinderin Ede – Bergbau-Roboter (Tech: Baumaschine)',
-       aufgabe: 'Eine Maschine, deren Code abbaue_hier() benutzt und die sich bewegt.',
-       code: 'while True:\n    vor = was_ist_vor_mir()\n    if vor == \'wand\':\n        drehe_rechts()\n    else:\n        gehe_vorwärts()\n    if was_ist_hier() in (\'erz_kohle\', \'erz_eisen\', \'erz_gold\', \'erz_diamant\'):\n        abbaue_hier()\n    warte(0.4)\n'}
-    ];
-    const vill = villagerLoesungen.filter(v => !suche || T(v.wer) || T(v.aufgabe) || T(v.code));
-    if (vill.length){
-      let hVill = '<h3 style="margin-top:20px;">Maschinen der Dorfbewohner – Vorschlagslösungen</h3>';
-      for (const v of vill){
-        hVill += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(v.wer) + '</h4>' +
-          '<div class="hint" style="margin:4px 0;">' + v.aufgabe + '</div><pre>' + U.escapeHtml(v.code) + '</pre></div>';
-      }
-      out.push(hVill);
-    }
-    /* Maschinen-Level mit echter Musterlösung */
-    const levelLsg = [
-      {lv: 'l7', name: 'Kapitel 8: Maschinen-Werkstatt'},
-      {lv: 'l7f', name: 'Kapitel 7: Die Feldkante (Reihen-Schlangenlinien)'},
-      {lv: 'l7g', name: 'Kapitel 7: Zwei Wiesen, ein Code'},
-      {lv: 'l7a', name: 'Kapitel 8: Doppelte Fenster'},
-      {lv: 'l7b', name: 'Kapitel 8: Die Kettenreaktion'}
-    ].filter(x => {
-      const L = LEVELS.find(y => y.id === x.lv);
-      return L && L.loesung && (!suche || T(x.name) || T(L.loesung));
-    });
-    if (levelLsg.length){
-      let hMl = '<h3 style="margin-top:20px;">Maschinen-Level – echte Musterlösungen</h3>' +
-        '<p class="hint" style="margin:6px 0;">Vier Level drehen sich um Maschinen – hier die vollständigen, erprobten Lösungen (im Level über den <b>!</b>-Knopf sichtbar, solange Musterlösungen freigegeben sind).</p>';
-      for (const {lv, name} of levelLsg){
-        const L = LEVELS.find(y => y.id === lv);
-        hMl += '<div class="panel" style="margin-top:10px;"><h4 style="color:var(--gold);">' + U.escapeHtml(name) + '</h4><pre>' + U.escapeHtml(L.loesung) + '</pre></div>';
-      }
-      hMl += '<div class="panel" style="margin-top:14px;"><h3>Eigenbau-Farm &amp; Logikschaltung (offene Welt)</h3>' +
-        '<div class="hint" style="margin:4px 0;">Die Weizenfarm am Start steht <b>nicht mehr fertig</b> – Schüler/innen bauen sie als Brunos erste Aufgabe SELBST: 🚜 Harke wählen und Rechtsklick pflügt, 🌱 Samen wählen und Rechtsklick sät, ohne Werkzeug wird geerntet &amp; sammelt. Umrandung &amp; Wasser sind KEINE Pflicht mehr – wer mag, bewässert als Extra (🪣 Eimer wählen, Rechtsklick ins Wasser, dann Rechtsklick aufs Feld); Weizen neben Wasser wächst schneller. ' +
-        'Die vollautomatische Variante folgt danach: Beobachter + Kabel → Tore → Wasser spült zu den Trichtern → Ernte-Kiste; die <b>Sähmaschine</b> säht neu, die <b>Pumpe</b> holt das Wasser zurück, der <b>Sortier-Meister</b> ordnet die Kiste (Körner → "saat", Stroh → "stroh", Weizen → "essen").</div></div>';
-      out.push(hMl);
-    }
-    return out.join('');
-  },
-  openMusterLoesungen(){
-    SFX.click();
-    this.modal({
-      title: '📖 Musterlösungen – nur Lehrkraft',
-      body: '<div style="display:flex; flex-direction:column; gap:8px; max-height:64vh;">' +
-        '<input type="text" id="ml-suche" placeholder="🔍 Level oder Befehl suchen …" style="flex:none;">' +
-        '<div id="ml-liste" style="flex:1; overflow-y:auto; padding-right:4px;">' + this.mlHtml('') + '</div>' +
-        '</div>',
-      buttons: [{label:'Schließen', primary:true, fn:()=>{}}]
-    });
-    const si = U.$('#ml-suche');
-    if (si) si.oninput = ()=>{
-      const box = U.$('#ml-liste');
-      if (box) box.innerHTML = this.mlHtml(si.value);
-    };
   },
 
   /* ---------- Fortschritt-Datei laden (Hauptmenü & Optionen) ----------
@@ -20078,6 +20173,7 @@ const App = {
   init(){
     TEX.build();
     this.loadAll();
+    GRAFIK.vorbereiten();
     RND.init();
     Game.bindInput();
     CodeUI.init();          // Zeilennummern · Autocomplete · Funktions-Spalte
