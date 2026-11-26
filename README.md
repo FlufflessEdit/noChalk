@@ -20,6 +20,9 @@ Works best with the Chrome Webbrowser!
 
 -----------------------------------------------------------------------------------------
 Patch-Notes
+
+2.2.2 you can now make precise selections in textboxes, when using touch as input.
+
 2.2.1 added ger and eng version. Added Powerpoint and similar support. Added H5P support. Added a touchpad beneath the clock, when touch is used as input. Added Feliz (Kahoot) and PSE. Tweaked some settings, fixed some bugs. 
 
 2.1.7 tweaked the touch navigation on big boards.
