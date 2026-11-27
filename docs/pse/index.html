@@ -883,6 +883,106 @@ body:not(.bg-dark) #tonne {
   border-style: dashed;
 }
 
+/* ===== Touchpad (Touch: Bühne mit einem Finger schieben) ===== */
+#touchpad {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 22;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#touchpad.da {
+  display: flex;
+}
+#tpHandle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 9px;
+  background: var(--panel);
+  border: 1px solid var(--linie);
+  border-radius: 9px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: grab;
+  color: var(--tinte-schwach);
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  touch-action: none;
+}
+#tpHandle:active {
+  cursor: grabbing;
+}
+#tpHandle span {
+  pointer-events: none;
+}
+#tpZu {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--linie);
+  border-radius: 5px;
+  color: var(--tinte-schwach);
+  cursor: pointer;
+}
+#tpZu svg {
+  width: 11px;
+  height: 11px;
+}
+#tpZu:hover {
+  color: var(--tinte);
+  border-color: var(--tinte-schwach);
+}
+#tpPad {
+  position: relative;
+  border-radius: 20px;
+  background: var(--panel);
+  border: 1.5px solid var(--linie);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  touch-action: none;
+}
+#tpKnob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  background: rgba(217, 160, 91, 0.22);
+  border: 2px solid var(--akzent);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3);
+  transition: transform 0.14s ease-out;
+  pointer-events: none;
+}
+#tpPad.zieht #tpKnob {
+  transition: none;
+}
+#tpHint {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--tinte-schwach);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+/* Infokarte hoch, wenn das Touchpad unten rechts liegt */
+body.touch #infoKarte {
+  bottom: 224px;
+}
+
 </style>
 <!-- END style.css -->
 
@@ -983,12 +1083,13 @@ body:not(.bg-dark) #tonne {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
         <h2>So funktioniert die Werkstatt</h2>
-        <
         <h3>Navigation</h3>
         <p>
-          <strong>Ziehen:</strong> eine Hand/Maus auf freier Fläche verschiebt die Ansicht. <strong>Touch:</strong> zwei Finger verschieben, Pinch
-          zoomt (100-px-Totzone). Mausrad zoomt. Im 3D-Modus zusätzlich: <strong>rechte Maustaste halten</strong> oder
-          <strong>drei Finger ziehen</strong> dreht das Molekül.
+          <strong>Maus:</strong> Ziehen auf freier Fläche verschiebt die Ansicht, Mausrad zoomt. <strong>Touch:</strong>
+          <strong>drei Finger</strong> verschieben die Bühne, <strong>zwei Finger</strong> zoomen (Pinch, 100-px-Totzone). Sobald Touch genutzt wird,
+          erscheint unten rechts ein <strong>Touchpad</strong>: ein Finger auf dem Knopf schiebt die Bühne, am Griff oben lässt sich das Pad
+          überallhin verschieben (✕ blendet aus, drei Finger holen es zurück). Im 3D-Modus drehen: <strong>rechte Maustaste halten</strong> (Maus) oder
+          <strong>ein Finger auf freier Fläche</strong> (Touch).
 
           <strong>Strg+Z</strong> macht die letzte Strukturänderung rückgängig (Binden, Trennen, Löschen, Elektronen-Experimente) — bis zu 40 Schritte
           weit.
@@ -1025,7 +1126,9 @@ body:not(.bg-dark) #tonne {
         <h3>Formeln</h3>
         <p>
           Eingeben und Enter — inklusive <strong>Ringen</strong> (C₆H₆ Benzol, S₈, C₅H₅⁻) und Ionenverbindungen (NaCl, Fe₂O₃, Al₂O₃).
-          Elektronen-Experiment: Klick auf einen leeren Schalenplatz setzt ein Elektron, Klick auf ein freies entfernt es.
+          Elektronen-Experiment: Freie Schalenplätze werden als <strong>gestrichelte Kreise</strong> gezeigt — Klick darauf setzt ein Elektron, Klick auf
+          ein besetztes entfernt es. Bindungselektronen sitzen als Paare zwischen den Atomen; bei <strong>polaren Bindungen</strong> halten sie sich
+          sichtbar häufiger beim elektronegativen Partner auf (δ+/δ−) — sie verlassen dabei aber nie ihre Schalen.
         </p>
         <h3>Organische Namen (IUPAC)</h3>
         <p>
@@ -1037,8 +1140,9 @@ body:not(.bg-dark) #tonne {
         <h3>3D-Lewis-Modus (Würfel-Button)</h3>
         <p>
           Moleküle werden als Kugel-Stab-Modell mit VSEPR-Geometrie gezeigt (Hybridisierung steht beim Überfahren in der Statuszeile: sp³ · AX₄ ·
-          tetraedrisch …). <strong>Leere Fläche ziehen</strong> dreht die Ansicht, <strong>Shift+Ziehen</strong> verschiebt, Mausrad zoomt.
-          Punkte-Paare an Kugeln sind freie Elektronenpaare.
+          tetraedrisch …). Drehen: <strong>rechte Maustaste</strong> (Maus) oder <strong>ein Finger auf freier Fläche</strong> (Touch), verschieben:
+          <strong>drei Finger</strong> oder das <strong>Touchpad</strong>, zoomen: Mausrad/Pinch. Ziehst du ein Atom, wandert das <strong>ganze
+          Molekül</strong> mit — einzelne Atome greifst du nur im Trennmodus (Schere). Punkte-Paare an Kugeln sind freie Elektronenpaare.
         </p>
         <p>
           <strong>Resonanz:</strong> Benzols Doppelbindungen klappen sichtbar herum — der Elektronenfluss wandert als gestrichelte Linie um den Ring
@@ -1048,14 +1152,18 @@ body:not(.bg-dark) #tonne {
         </p>
         <h3>Brønsted-Säure-Base</h3>
         <p>
-          Nähert sich eine <strong>Säure</strong> (HCl, H₂SO₄, Essigsäure, H₃O⁺ …) einer <strong>Base</strong> (H₂O, NH₃, OH⁻, Acetat …), springt ein
+          Nähert sich eine <strong>Säure</strong> (HCl, H₂SO₄, Essigsäure, <strong>Zitronensäure</strong>, H₃O⁺ …) einer <strong>Base</strong> (H₂O, NH₃, OH⁻, Acetat …), springt ein
           Proton sichtbar über: Das H löst sich mit Puls-Ring, fliegt als H⁺ im Bogen zur Base und dockt dort an — das Elektronenpaar der
           Abgabe-Bindung bleibt beim Rest, der als Anion zurückbleibt. Die Richtung entscheidet die pKS-Regel (stärkere Säure → schwächere). HCl + H₂O
-          → H₃O⁺ + Cl⁻; OH⁻ + H₃O⁺ → 2 H₂O (Neutralisation). Ampholyte wie H₂O können beide Rollen spielen!
+          → H₃O⁺ + Cl⁻; OH⁻ + H₃O⁺ → 2 H₂O (Neutralisation). Ampholyte wie H₂O können beide Rollen spielen! Bei mehrbasigen Säuren wie der
+          Zitronensäure springt das Proton der Säuregruppe, auf die du das Wasser ziehst — die Stufe regelt der pKS-Wert (3,1 → 4,8 → 6,4).
         </p>
         <p>
           Am schnellsten testest du über die <strong>Szenen</strong> im Beispiele-Menü: „Säure + Wasser" (HCl an H₂O ziehen), „Neutralisation" (H₃O⁺ +
-          OH⁻ → 2 H₂O), „Ammoniak + HCl" (→ NH₄⁺ + Cl⁻) und den Wasser-Cluster für Wasserstoffbrücken.
+          OH⁻ → 2 H₂O), „Ammoniak + HCl" (→ NH₄⁺ + Cl⁻) und den Wasser-Cluster für Wasserstoffbrücken. Die Gruppe <strong>„Stoffmengen &
+          Löslichkeit"</strong> liefert Stoffmengen für den Unterricht: NaCl-<strong>Ionengitter</strong> (16 bzw. 36 Ionen), <strong>Salz in
+          Wasser</strong> (Hydrathüllen, Löslichkeit), gelöste Ionen, viele <strong>Pentan-/Nonan-Ketten</strong> für die <strong>Viskosität</strong>
+          sowie <strong>Zitronensäure</strong> allein und in Wasser (schwache Säure, teilweise Dissoziation).
         </p>
         <h3>Farblegende</h3>
         <div class="legende" id="legende"></div>
@@ -1096,6 +1204,16 @@ body:not(.bg-dark) #tonne {
       <div id="infoTitel"></div>
       <div id="infoFormel"></div>
       <div id="infoZeilen"></div>
+    </div>
+    <div id="touchpad" aria-label="Touchpad zum Verschieben der Bühne">
+      <div id="tpHandle" title="Ziehen: Touchpad verschieben">
+        <span>TOUCHPAD</span>
+        <button type="button" id="tpZu" title="Touchpad ausblenden (erscheint wieder bei 3-Finger-Bedienung)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <div id="tpPad"><div id="tpKnob"></div></div>
+      <div id="tpHint">BÜHNE SCHIEBEN</div>
     </div>
     <div id="toasts" aria-live="polite"></div>
 
@@ -2403,7 +2521,7 @@ const Lewis = (function () {
     p.parts.forEach((part) => {
       for (let i = 0; i < part.count; i++) atoms.push({ id: atoms.length, element: part.sym });
     });
-    if (atoms.length > 200) return fail("Maximal 200 Atome werden unterstützt.");
+    if (atoms.length > 40) return fail("Maximal 40 Atome werden unterstützt.");
     let total = 0;
     atoms.forEach((a) => {
       total += veOf(a.element);
@@ -2526,6 +2644,7 @@ const Organik = (function () {
     ["meth", 1],
     ["dec", 10],
     ["non", 9],
+    ["okt", 8],
     ["oct", 8],
     ["hex", 6],
     ["pent", 5],
@@ -2548,6 +2667,8 @@ const Organik = (function () {
     aceton: "propan-2-on",
     essigsaure: "ethansaure",
     ameisensaure: "methansaure",
+    zitronensaure: "1,2,3-tricarboxy-2-hydroxypropan",
+    citronensaure: "1,2,3-tricarboxy-2-hydroxypropan",
     isopropylalkohol: "propan-2-ol",
     tertbutanol: "2-methylpropan-2-ol",
     isobutan: "2-methylpropan",
@@ -2557,6 +2678,10 @@ const Organik = (function () {
     ethylen: "ethen",
     acetylen: "ethin",
     butadien: "buta-1,3-dien",
+    oktanol: "oktan-1-ol",
+    octanol: "octan-1-ol",
+    oktylalkohol: "oktan-1-ol",
+    kaprylalkohol: "octan-1-ol",
   };
 
   const SUBS = {
@@ -2606,6 +2731,8 @@ const Organik = (function () {
       "methylcyclohexan",
       "aceton",
       "essigsaure",
+      "zitronensaure",
+      "citronensaure",
       "formaldehyd",
       "glycol",
       "buta-1,3-dien",
@@ -2615,7 +2742,7 @@ const Organik = (function () {
       "2,2-dimethylbutan",
       "2,3-dimethylbutan",
     ];
-    const staemme = ["meth", "eth", "prop", "but", "pent", "hex", "hept", "oct", "non", "dec"];
+    const staemme = ["meth", "eth", "prop", "but", "pent", "hex", "hept", "okt", "oct", "non", "dec"];
     staemme.forEach(function (st, i) {
       const n = i + 1;
       list.push(st + "an", st + "en", st + "in", st + "an-1-ol", st + "anal", st + "ansaure");
@@ -2813,7 +2940,7 @@ const Organik = (function () {
           break;
         }
       }
-      if (!n) return fehler("Stamm nicht erkannt (Meth…, Eth…, Prop…, But…, Pent…, Hex…, Hept…, Oct…, Non…, Dec…).");
+      if (!n) return fehler("Stamm nicht erkannt (Meth…, Eth…, Prop…, But…, Pent…, Hex…, Hept…, Okt…/Oct…, Non…, Dec…).");
       if (s.startsWith("a-")) s = s.slice(2);
       else if (s.startsWith("a") && !s.startsWith("an") && !s.startsWith("al") && !s.startsWith("as")) s = s.slice(1);
       while (s.startsWith("-")) s = s.slice(1); /* FIX: but-2-en, prop-2-en-1-ol, hex-2-in … */
@@ -3135,7 +3262,13 @@ function makeAtom(Z, x, y) {
     relaxDirty: false,
   };
   counts.forEach((c, s) => {
-    const slots = buildShellSlots(c, el.shells[s] || 0, -Math.PI / 2 + s * 0.35);
+    /* Innere Schalen erhalten pro Atom einen gedrehten Slot-Ring (goldener
+       Winkel) — so liegen innere Elektronen nicht systematisch auf den
+       Bindungsachsen, und Bindungspaare können sichtbar zum EN-Atom
+       wandern, ohne sie zu überlappen. Die Außenschale bleibt ausgerichtet. */
+    const innen = s < counts.length - 1;
+    const rot = -Math.PI / 2 + s * 0.35 + (innen ? a.id * 2.39996323 : 0);
+    const slots = buildShellSlots(c, el.shells[s] || 0, rot);
     a.shells.push({ slots });
     slots.forEach((sl, i) => {
       if (sl.st === "e") {
@@ -4216,6 +4349,7 @@ function buildFromFormula(str, center, keep) {
   }
 
   if (typeof fitAtoms === "function") fitAtoms();
+  refreshCounts(); /* Statuszeile: Atom-/Bindungszahl nach dem Aufbau */
   /* Frisch Gebautes FLACH zur Kamera (3D) — drehen kann man selbst. */
   if (typeof Raum !== "undefined" && Raum.an) {
     Raum.view.rx = 0;
@@ -4259,6 +4393,158 @@ function coulombKraft(qa, qc, d) {
   let f = (3.2e6 * qa * qc) / d2;
   f = clamp(f, -COULOMB_VMAX, COULOMB_VMAX);
   return f;
+}
+
+/* ---------- Ion-Dipol (Hydration) ----------
+   Geladene Teilchen ziehen die δ-Zentren NEUTRALER, polarer Moleküle an
+   (Na⁺ ↔ O von H₂O, Cl⁻ ↔ H). Die Kraft ist weich und gecappt: Das
+   Ionengitter (Coulomb-Federn) bleibt stabil, Wassermoleküle kriechen
+   heran, umlagern die Ionen und folgen beim Wegziehen (Hydrathülle) —
+   so lässt sich Löslichkeit von Salzen direkt vorführen. */
+function ionDipolSchritt() {
+  const n = atoms.length;
+  if (!n) return;
+  /* Verbands-Ladung cachen: nur NEUTRALE Verbände reagieren als Dipol
+     (Ionen wie H₃O⁺/OH⁻ laufen über Coulomb, nicht über Ion-Dipol) */
+  const verbQ = new Map();
+  for (const a of atoms) {
+    if (verbQ.has(a.id)) continue;
+    const m = bondComponent(a);
+    let q = 0;
+    for (const x of m) q += qOf(x);
+    for (const x of m) verbQ.set(x.id, q);
+  }
+  for (const a of atoms) {
+    const qa = qOf(a);
+    if (qa === 0 || a.dead) continue;
+    for (const c of atoms) {
+      if (c === a || c.dead) continue;
+      if (qOf(c) !== 0 || verbQ.get(c.id) !== 0) continue;
+      const pc = partialCharge(c);
+      if (pc === 0) continue;
+      if ((qa > 0) === (pc > 0)) continue; /* nur ungleichnamig */
+      if (bonded(a, c) || a.held !== c.held) continue;
+      const dx = c.pos.x - a.pos.x,
+        dy = c.pos.y - a.pos.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 340 || d < 1) continue;
+      const R = (a.edge + c.edge) * 0.8;
+      const f = d > R ? Math.min((d - R) * 2.0, 150) : Math.max((d - R) * 2.0, -30);
+      const ux = dx / d,
+        uy = dy / d;
+      if (!a.held) {
+        a.acc.x += ux * f;
+        a.acc.y += uy * f;
+      }
+      if (!c.held) {
+        c.acc.x -= ux * f;
+        c.acc.y -= uy * f;
+      }
+    }
+  }
+}
+
+/* ---------- Dipol-Ausrichtung (Hydration) ----------
+   Ionen drehen nahe, neutrale, polare Moleküle so, dass der richtige
+   Pol zeigt: δ− (z. B. O von H₂O) zum Kation, δ+ (H) zum Anion. Erst
+   die Ausrichtung macht Hydrathüllen korrekt sichtbar.
+   Kinematische Rotation (wie im 3D-Pfad): das Molekül dreht als
+   Starrkörper um seinen Schwerpunkt — ein kräftebasiertes Drehmoment
+   verliert hier gegen die Kraftbalance aus Ion-Dipol, H-Brücken und
+   Kollision und bliebe in falscher Orientierung stecken. Die Rotation
+   erhält Kernabstände (Federn reagieren nicht), Kollisionen lösen
+   danach auf. Nur zum NÄCHSTEN Ion ausrichten — mehrere Ionen würden
+   sich sonst gegenseitig aufheben; Distanz-Gewicht lässt das nächste
+   Ion dominieren. Gesperrt, wenn gezogen oder gebunden. */
+function dipolDrehSchritt(dt) {
+  if (atoms.length < 3) return;
+  for (const a of atoms) a._drehAktiv = false; /* Flag für Raster-Snap */
+  const comps = [];
+  const gesehen = new Set();
+  for (const a of atoms) {
+    if (a.dead || gesehen.has(a.id)) continue;
+    const m = bondComponent(a);
+    m.forEach((x) => gesehen.add(x.id));
+    if (m.length < 2) continue;
+    let q = 0,
+      polSum = 0;
+    for (const x of m) {
+      q += qOf(x);
+      polSum += Math.abs(partialCharge(x));
+    }
+    if (q !== 0 || polSum < 0.5) continue; /* nur neutrale Dipole */
+    if (m.some((x) => x.held || x._protonFlug || x._protonAnkunft)) continue;
+    let cx = 0,
+      cy = 0,
+      dipx = 0,
+      dipy = 0;
+    for (const x of m) {
+      cx += x.pos.x;
+      cy += x.pos.y;
+    }
+    cx /= m.length;
+    cy /= m.length;
+    for (const x of m) {
+      const pc = partialCharge(x);
+      if (pc === 0) continue;
+      dipx += pc * (x.pos.x - cx);
+      dipy += pc * (x.pos.y - cy);
+    }
+    const dp = Math.hypot(dipx, dipy);
+    if (dp < 2) continue; /* unpolare Anordnung (z. B. CO₂) */
+    comps.push({ m: m, cx: cx, cy: cy, dipx: dipx / dp, dipy: dipy / dp });
+  }
+  for (const c of comps) {
+    /* nächstgelegenes freies Ion, das nicht an dieses Molekül gebunden ist */
+    let bestI = null,
+      bestD = 1e9;
+    for (const a of atoms) {
+      const qa = qOf(a);
+      if (qa === 0 || a.dead || a.held || a._protonFlug || a._protonAnkunft) continue;
+      let gebunden = false;
+      for (const x of c.m) {
+        if (bonded(a, x)) {
+          gebunden = true;
+          break;
+        }
+      }
+      if (gebunden) continue;
+      const d = Math.hypot(c.cx - a.pos.x, c.cy - a.pos.y);
+      if (d < bestD) {
+        bestD = d;
+        bestI = a;
+      }
+    }
+    if (!bestI || bestD > 400 || bestD < 1) continue;
+    const gw = clamp((400 - bestD) / 280, 0, 1);
+    if (gw <= 0.02) continue;
+    /* Ziel: Dipolrichtung (δ−→δ+) zeigt VOM Kation weg bzw. ZUM Anion.
+       ψ = Winkel Zentrum→Ion; Kation: Dipol-Spitze (δ+) nach außen. */
+    const ziel = Math.atan2(bestI.pos.y - c.cy, bestI.pos.x - c.cx) + (qOf(bestI) > 0 ? Math.PI : 0);
+    const delta = angNorm(ziel - Math.atan2(c.dipy, c.dipx));
+    /* sin(Δ) allein versagt am Sattelpunkt Δ≈π (Dipol zeigt exakt zum
+       Ion): dort wäre die Winkelgeschwindigkeit null und bliebe es.
+       Die lineare Beimischung macht Δ=π entschieden instabil, ohne
+       Δ=0 (Soll-Lage) zum Wackeln zu bringen. */
+    const s = Math.abs(Math.sin(delta)) + 0.22 * (Math.abs(delta) / Math.PI);
+    if (s < 0.02) continue;
+    const rotW = clamp(delta * (1 - Math.exp(-3.2 * dt)) * gw * gw, -0.055, 0.055);
+    if (Math.abs(rotW) < 0.0002) continue;
+    const cs = Math.cos(rotW),
+      sn = Math.sin(rotW);
+    /* Rotationsgeschwindigkeit mitgeben (rad/s · r) + Snap-Flag: das
+       Anti-Drift-Raster darf rotierende Moleküle nicht festhalten. */
+    const omega = rotW / Math.max(dt, 0.001);
+    for (const x of c.m) {
+      const rx = x.pos.x - c.cx,
+        ry = x.pos.y - c.cy;
+      x.pos.x = c.cx + rx * cs - ry * sn;
+      x.pos.y = c.cy + rx * sn + ry * cs;
+      x.vel.x += (-ry * omega - x.vel.x) * 0.45;
+      x.vel.y += (rx * omega - x.vel.y) * 0.45;
+      x._drehAktiv = true;
+    }
+  }
 }
 
 function gridRest(b) {
@@ -4467,6 +4753,9 @@ function physicsStep(dt) {
   /* 3) Coulomb zwischen ungebundenen Ionen (stabilisiert) */
   coulombSchritt(n);
 
+  /* 3b) Ion-Dipol: Hydration neutraler, polarer Moleküle */
+  ionDipolSchritt();
+
   hBrueckenListe();
   hbrKraefte();
 
@@ -4493,7 +4782,9 @@ function physicsStep(dt) {
     }
     a.pos.x += a.vel.x * dt;
     a.pos.y += a.vel.y * dt;
-    const g = (sp < 30 ? 1 : 0.3) * clamp(7 * dt, 0, 0.3);
+    /* Rotierende Moleküle (Hydrat-Drehung) vom Raster ausnehmen — das
+       Anti-Drift-Raster würde jede langsame Drehung wieder glattziehen */
+    const g = (a._drehAktiv ? 0.12 : sp < 30 ? 1 : 0.3) * clamp(7 * dt, 0, 0.3);
     a.pos.x += (Math.round(a.pos.x / GRID) * GRID - a.pos.x) * g;
     a.pos.y += (Math.round(a.pos.y / GRID) * GRID - a.pos.y) * g;
     const x0 = STAGE.x - STAGE.hw + a.edge,
@@ -4517,6 +4808,11 @@ function physicsStep(dt) {
       if (a.vel.y > 0) a.vel.y = 0;
     }
   }
+
+  /* 5b) Dipol-Ausrichtung (Hydration) — NACH dem Raster-Snapping:
+     das 20er-Raster würde jede langsame Drehung sofort wieder
+     glattziehen. Hier dreht die Rotation als letzter Schritt und gilt. */
+  dipolDrehSchritt(dt);
 
   /* 6) Bindungsbruch bei Überdehnung */
   /* Bruch: Schere 1,5× · ohne Schere EXTREM-Bruch 6× (Schutz beim
@@ -4572,6 +4868,7 @@ function raumPhysik(dt) {
     atoms[i].acc.y = 0;
   }
   coulombSchritt(n);
+  ionDipolSchritt();
   hBrueckenListe();
   hbrKraefte();
   kollisionsSchritt(n);
@@ -4899,6 +5196,11 @@ const Bronsted = (function () {
     HF: 3.2,
     CH2O2: 3.7,
     C2H4O2: 4.8,
+    C3H6O2: 4.9,
+    C4H8O2: 4.8,
+    C6H8O7: 3.1,
+    "C6H7O7-": 4.8,
+    "C6H6O7^2-": 6.4,
     CH2O3: 6.4,
     "H4N+": 9.3,
     CHN: 9.4,
@@ -4923,6 +5225,8 @@ const Bronsted = (function () {
     "O4S-": 1.9,
     "F-": 3.2,
     "CH3O-": 15.5,
+    "C6H7O7-": 3.1,
+    "C6H6O7^2-": 4.8,
   };
 
   function summenformel(members) {
@@ -4954,8 +5258,39 @@ const Bronsted = (function () {
   function istProtonDonor(mol) {
     const pks = PKS[keyVon(mol)];
     if (pks === undefined || pks >= 16) return null;
-    const hs = mol.filter((m) => m.el.sym === "H" && m.bonds.some((b) => b.type === "cov" && (b.a === m ? b.b : b.a).el.cat !== "ak"));
-    return hs.length ? { pks: pks, hs: hs } : null;
+    let hs = mol.filter((m) => m.el.sym === "H" && m.bonds.some((b) => b.type === "cov" && (b.a === m ? b.b : b.a).el.cat !== "ak"));
+    if (!hs.length) return null;
+    /* Säuregruppen zuerst: bei Carbonsäuren (Essigsäure, Zitronensäure
+       …) darf NUR das saure O-H wandern — nie ein C-H der Kette und
+       auch nicht der Alkohol-OH (Zitronensäure hat 3 COOH + 1 C-OH!).
+       Acid = O-H, dessen O an ein C mit C=O gebunden ist. Falls es
+       keine solche Gruppe gibt, bleiben alle O-gebundenen H angeboten
+       (H₂SO₄, HNO₃ …), sonst alle (HCl, NH₄⁺ …). */
+    const istSaeureOH = (h) => {
+      for (const b of h.bonds) {
+        if (b.type !== "cov") continue;
+        const o = b.a === h ? b.b : b.a;
+        if (o.el.sym !== "O") continue;
+        for (const b2 of o.bonds) {
+          if (b2.type !== "cov" || b2 === b) continue;
+          const c = b2.a === o ? b2.b : b2.a;
+          if (c.el.sym !== "C") continue;
+          for (const b3 of c.bonds) {
+            if (b3.type === "cov" && b3.order === 2 && (b3.a === c ? b3.b : b3.a).el.sym === "O") return true;
+          }
+        }
+      }
+      return false;
+    };
+    const saure = hs.filter(istSaeureOH);
+    if (saure.length) hs = saure;
+    else {
+      const oh = hs.filter((m) =>
+        m.bonds.some((b) => b.type === "cov" && (b.a === m ? b.b : b.a).el.sym === "O"),
+      );
+      if (oh.length) hs = oh;
+    }
+    return { pks: pks, hs: hs };
   }
   function istProtonAkzeptor(mol) {
     const key = keyVon(mol);
@@ -6499,7 +6834,89 @@ const Raum = (function () {
       }
       molekuele.push(mol);
     }
+    dipolAusrichtung3D(dt);
     anims = anims.filter((x) => t - x.t0 < (x.dauer || 0.5) + 0.4);
+  }
+
+  /* ---------- Dipol-Ausrichtung (3D) ----------
+     Ionen richten nahe, neutrale, polare Moleküle aus: δ− (O von H₂O)
+     zum Kation, δ+ (H) zum Anion — erst so zeigen Hydrathüllen korrekt.
+     Die _off-Offsets rotieren geschlossen um den Molekül-Mittelpunkt
+     (in der Bildebene); der yaw-Fit folgt über thetaSig=null im
+     nächsten Frame. Geschlossener Regelkreis: Messung immer an den
+     projizierten Positionen, deshalb verträgt sich das mit gedrehter
+     Kamera. Skipped, wenn der Benutzer das Molekül gerade zieht. */
+  function dipolAusrichtung3D(dt) {
+    const ionen = [];
+    for (const a of atoms) {
+      if (!a.dead && qOf(a) !== 0 && !a.held && !a._protonFlug && !a._protonAnkunft) ionen.push(a);
+    }
+    if (!ionen.length) return;
+    for (const mol of molekuele) {
+      if (mol.teils) continue;
+      if (mol.members.some((x) => x.held)) continue; /* gezogen: nicht anfassen */
+      const m = mol.members;
+      if (m.length < 2) continue;
+      let q = 0,
+        polSum = 0,
+        ok = true;
+      for (const x of m) {
+        q += qOf(x);
+        polSum += Math.abs(partialCharge(x));
+        if (!x._off || !x._p) ok = false;
+      }
+      if (q !== 0 || polSum < 0.5 || !ok) continue;
+      let cx = 0,
+        cy = 0;
+      for (const x of m) {
+        cx += x._p.x;
+        cy += x._p.y;
+      }
+      cx /= m.length;
+      cy /= m.length;
+      let dipx = 0,
+        dipy = 0;
+      for (const x of m) {
+        const pc = partialCharge(x);
+        if (pc === 0) continue;
+        dipx += pc * (x._p.x - cx);
+        dipy += pc * (x._p.y - cy);
+      }
+      const dp = Math.hypot(dipx, dipy);
+      if (dp < 2) continue; /* unpolare Anordnung (z. B. CO₂) */
+      /* nächstgelegenes Ion, das nicht an dieses Molekül gebunden ist */
+      let bestI = null,
+        bestD = 1e9;
+      for (const i of ionen) {
+        let gebunden = false;
+        for (const x of m) {
+          if (bonded(i, x)) {
+            gebunden = true;
+            break;
+          }
+        }
+        if (gebunden) continue;
+        const d = Math.hypot(i.pos.x - cx, i.pos.y - cy);
+        if (d < bestD) {
+          bestD = d;
+          bestI = i;
+        }
+      }
+      if (!bestI || bestD > 340 || bestD < 1) continue;
+      const ziel = Math.atan2(bestI.pos.y - cy, bestI.pos.x - cx) + (qOf(bestI) > 0 ? Math.PI : 0);
+      const delta = angNorm(ziel - Math.atan2(dipy, dipx));
+      const rotW = delta * (1 - Math.exp(-2.6 * dt));
+      if (Math.abs(rotW) < 0.0015) continue;
+      const cs = Math.cos(rotW),
+        sn = Math.sin(rotW);
+      for (const x of m) {
+        const ox = x._off.x,
+          oy = x._off.y;
+        x._off.x = ox * cs - oy * sn;
+        x._off.y = ox * sn + oy * cs;
+      }
+      mol.thetaSig = null; /* yaw-Fit passt sich im nächsten Frame an */
+    }
   }
 
   /* ---------- Heterolyse beim Löschen ---------- */
@@ -7165,6 +7582,7 @@ const Chemie = (function () {
     CH2O: { name: "Methanal", baue: "Methanal" },
     CH2O2: { name: "Ameisensäure" },
     C2H4O2: { name: "Essigsäure" },
+    C6H8O7: { name: "Zitronensäure", baue: "Zitronensäure" },
     H2O4S: { name: "Schwefelsäure" },
     HNO3: { name: "Salpetersäure" },
     SF6: { name: "Schwefelhexafluorid" },
@@ -7759,7 +8177,18 @@ const Regeln = (function () {
     ]) {
       const erg = Bronsted.pruefePaar(XY[0].members, XY[1].members);
       if (!erg || !erg.laeuft) continue;
-      const h = erg.d.hs[0];
+      /* Das saure H, das der Akzeptor-Molekül AM NÄCHSTEN ist, wandert —
+         zieht man z. B. H₂O an eine bestimmte COOH-Gruppe der Zitronen-
+         säure, reagiert genau diese Gruppe (drei Säure-Gruppen!). */
+      const h = erg.d.hs.length
+        ? erg.d.hs
+            .slice()
+            .sort(
+              (p, q) =>
+                Math.min(...XY[1].members.map((m) => Math.hypot(m.pos.x - p.pos.x, m.pos.y - p.pos.y))) -
+                Math.min(...XY[1].members.map((m) => Math.hypot(m.pos.x - q.pos.x, m.pos.y - q.pos.y))),
+            )[0]
+        : null;
       if (!h) continue;
       const rest = XY[0].members.filter((m) => m !== h);
       const prod = XY[1].members.concat([h]);
@@ -10118,7 +10547,8 @@ const Reaktion = (function () {
 
     const zeiger = d.last || { x: d.atom.pos.x, y: d.atom.pos.y };
 
-    /* ===== Intramolekular: Einzelatom-Zug (Trenn-/3D-Modus) ===== */
+    /* ===== Intramolekular: Einzelatom-Zug (nur Trennmodus — ohne
+       Schere bewegt der Zug das ganze Molekül) ===== */
     const einzeln = !!(d.member && d.member.length === 1);
     if (einzeln && memb.length > 1 && Regeln.kannBinden(d.atom)) {
       let intraZiel = null,
@@ -10729,8 +11159,8 @@ function withSpawnScale(a, fn) {
 }
 function outerPath(a) {
   ctx.beginPath();
-  for (let i = 0; i <= 88; i++) {
-    const th = (i / 88) * TAU,
+  for (let i = 0; i <= 48; i++) {
+    const th = (i / 48) * TAU,
       r = outerRAt(a, th);
     const x = a.pos.x + Math.cos(th) * r,
       y = a.pos.y + Math.sin(th) * r;
@@ -10749,7 +11179,8 @@ function tintOf(a) {
 const FORMAL_SHELL_COL = ["#7d858d", "#8b9299", "#989ea5", "#a5abb1"];
 
 /* Jeder Platz: gestrichelt leer ODER ein Elektron. Schalen in der
-   Atom-CPK-Farbe (tintOf: CPK · formal → Grau). */
+   Atom-CPK-Farbe (tintOf: CPK · formal → Grau). Bindungselektronen
+   zeichnet drawBondPaare als verschobene Paare zwischen den Atomen. */
 function drawShells(a) {
   const last = a.shells.length - 1;
   for (let s = 0; s <= last; s++) {
@@ -10770,27 +11201,28 @@ function drawShells(a) {
       if (slot.st === "e") {
         const e = slot.e;
         if (e && e.state === "slot") {
+          if (e.bond) continue; /* → drawBondPaare (Paar zwischen den Atomen) */
           const th = dispAng(a, e);
           const r = s === last ? outerRAt(a, th) : a.radii[s];
           if (isFinite(th) && isFinite(r)) drawElectronBubble(a.pos.x + Math.cos(th) * r, a.pos.y + Math.sin(th) * r, col, hov);
         }
       } else {
+        /* freier Elektronen-Platz: gestrichelte Umrandung */
         const p = slotPosWorld(a, s, i);
-        if (dunkelAuf(col) < 1) {
-          /* nur auf dunklen/bunten Kugeln */
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r * 0.8, 0.25, 1.45);
-          ctx.strokeStyle = rgbStr([255, 255, 255], 0.32 * (1 - fog));
-          ctx.lineWidth = Math.max(1.4, r * 0.17);
-          ctx.lineCap = "round";
-          ctx.stroke();
-          ctx.lineCap = "butt";
-        }
-        ctx.setLineDash([]);
+        if (!isFinite(p.x) || !isFinite(p.y)) continue;
         if (hov) {
-          ctx.fillStyle = "rgba(240,200,90,.35)";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, BUB * 1.2, 0, TAU);
+          ctx.fillStyle = "rgba(240,200,90,.3)";
           ctx.fill();
         }
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, BUB * 0.85, 0, TAU);
+        ctx.setLineDash([3, 3.2]);
+        ctx.lineWidth = hov ? 2 : 1.4;
+        ctx.strokeStyle = hexA(col, hov ? 0.95 : 0.55);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
   }
@@ -10805,11 +11237,259 @@ function drawElectronBubble(x, y, col, hov) {
   ctx.lineWidth = 2.4;
   ctx.strokeStyle = col;
   ctx.stroke();
-  ctx.fillStyle = "#171b22";
-  ctx.font = "700 11px " + FONT;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("−", x, y + 0.5);
+  /* Minus als Strich statt Glyph — deutlich günstiger bei vielen Punkten */
+  ctx.strokeStyle = "#171b22";
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(x - 3.1, y);
+  ctx.lineTo(x + 3.1, y);
+  ctx.stroke();
+}
+
+/* ---------- Bindungselektronen-Paare (2D) ----------
+   Jedes gemeinsame Elektronenpaar wird als zwei Punkte SENKRECHT zur
+   Bindungsachse im Zentrum der Schalen-Überlappung gezeichnet. Bei
+   polaren Bindungen wandert das Paarzentrum sichtbar zur elektronega-
+   tiven Seite (ΔEN) — die bindenden Elektronen halten sich dort auf.
+   Keine Überlappungen: innerhalb des Paars fester Abstand, Paare einer
+   Mehrfachbindung liegen versetzt entlang der Achse, und eine kleine
+   Ausweich-Relaxation hält Punkte von freien Elektronen und
+   Nachbarbindungen fern. */
+const PAAR_ABSTAND = 2 * BUB + 3;
+const PAAR_STAPEL = PAAR_ABSTAND + 4;
+
+function bondPaarPunkte() {
+  const paare = [];
+  /* freie Elektronen als feste Hindernisse einsammeln */
+  const lone = [];
+  for (const a of atoms) {
+    if (a.dead) continue;
+    for (let s = 0; s < a.shells.length; s++) {
+      const sh = a.shells[s];
+      for (let i = 0; i < sh.slots.length; i++) {
+        const sl = sh.slots[i];
+        if (sl.st !== "e" || !sl.e || sl.e.bond || sl.e.state !== "slot") continue;
+        const th = dispAng(a, sl.e);
+        const r = s === a.shells.length - 1 ? outerRAt(a, th) : a.radii[s];
+        if (isFinite(th) && isFinite(r)) lone.push({ x: a.pos.x + Math.cos(th) * r, y: a.pos.y + Math.sin(th) * r });
+      }
+    }
+  }
+  for (const b of bonds) {
+    if (b.type !== "cov" || !b.pairs.length || b.a.dead || b.b.dead) continue;
+    const A = b.a,
+      Bx = b.b;
+    const dx = Bx.pos.x - A.pos.x,
+      dy = Bx.pos.y - A.pos.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const ux = dx / d,
+      uy = dy / d;
+    const thAB = Math.atan2(dy, dx);
+    const edgeA = outerRAt(A, thAB);
+    const edgeB = d - outerRAt(Bx, thAB + Math.PI);
+    const srA = clamp(A.kernR * 0.86, 15, 27);
+    const srB = clamp(Bx.kernR * 0.86, 15, 27);
+    let c0 = (edgeA + edgeB) / 2;
+    if (b.polar && b.dEN > 0.4) {
+      /* Polare Bindung: Paarzentrum zur elektronegativen Seite schieben.
+         grenz() ermittelt je EN-Atom, wie weit das Paar zum Kern wandern
+         darf, ohne innere Schalen-Elektronen zu überlappen (Punkte auf
+         Slots nahe der Bindungsachse setzen die Untergrenze des
+         Kernabstands). Je größer ΔEN, desto weiter wandert das Paar —
+         bis an die innere Schale des EN-Atoms heran. */
+      const n = b.pairs.length;
+      const pol = clamp((b.dEN - 0.4) / 0.9, 0, 1) * 0.9;
+      const enA = b.strong === "a";
+      const grenz = (at, achse) => {
+        let g = clamp(at.kernR * 0.86, 15, 27) + 21;
+        for (let s = 0; s < at.shells.length - 1; s++) {
+          const sh = at.shells[s],
+            rD = at.radii[s];
+          for (const sl of sh.slots) {
+            if (sl.st !== "e" || !sl.e || sl.e.bond || sl.e.state !== "slot") continue;
+            const delta = Math.abs(angNorm(sl.ang - achse));
+            const aw = Math.asin(Math.min(1, PAAR_ABSTAND / 2 / Math.max(24, rD)));
+            const senk = rD * Math.sin(Math.max(0, delta - aw));
+            if (senk >= PAAR_ABSTAND + 1) continue;
+            const lb = rD * Math.cos(Math.max(0, delta - aw)) + Math.sqrt(Math.max(0, (PAAR_ABSTAND + 1) * (PAAR_ABSTAND + 1) - senk * senk));
+            g = Math.max(g, lb);
+          }
+        }
+        return g;
+      };
+      const ziel = enA ? grenz(A, thAB) : d - grenz(Bx, thAB + Math.PI);
+      c0 = enA ? c0 - pol * Math.max(0, c0 - ziel) : c0 + pol * Math.max(0, ziel - c0);
+      c0 = clamp(c0, srA + 6, d - srB - 6);
+      /* Schalen-Clamp: bindende Elektronen verlassen ihre Schalen NIE.
+         Beide Punkte des Paares (inkl. Stapel-Versatz bei Mehrfach-
+         bindungen) müssen innerhalb beider Schalenkreise bleiben —
+         sonst wandert z. B. bei H₂O das Paar aus der Wasserstoffschale.
+         Der verschobene Wert wird per Bisektion zur Schalenkante
+         zurückgeholt; die Polarisierung bleibt sichtbar (δ-Badges). */
+      const h2 = PAAR_ABSTAND / 2;
+      const stapel = ((n - 1) / 2) * PAAR_STAPEL;
+      const drin = (t) => {
+        const ts = stapel > 0 ? [t - stapel, t + stapel] : [t];
+        for (const tt of ts) {
+          const p1x = A.pos.x + ux * tt - uy * h2,
+            p1y = A.pos.y + uy * tt + ux * h2;
+          const p2x = A.pos.x + ux * tt + uy * h2,
+            p2y = A.pos.y + uy * tt - ux * h2;
+          for (const P of [
+            [p1x, p1y],
+            [p2x, p2y],
+          ]) {
+            for (const at of [A, Bx]) {
+              const vx = P[0] - at.pos.x,
+                vy = P[1] - at.pos.y;
+              if (Math.hypot(vx, vy) > outerRAt(at, Math.atan2(vy, vx)) - 2) return false;
+            }
+          }
+        }
+        return true;
+      };
+      const basis = clamp((edgeA + edgeB) / 2, srA + 6, d - srB - 6);
+      if (!drin(c0)) {
+        if (drin(basis)) {
+          let lo = basis,
+            hi = c0;
+          for (let it = 0; it < 18; it++) {
+            const mid = (lo + hi) / 2;
+            if (drin(mid)) lo = mid;
+            else hi = mid;
+          }
+          c0 = lo;
+        } else {
+          c0 = basis;
+        }
+      }
+    } else {
+      c0 = clamp(c0, srA + 6, d - srB - 6);
+    }
+    const n = b.pairs.length;
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * PAAR_STAPEL;
+      paare.push({
+        b: b,
+        i: i,
+        cx: A.pos.x + ux * (c0 + off),
+        cy: A.pos.y + uy * (c0 + off),
+        px: -uy,
+        py: ux,
+      });
+    }
+  }
+  /* Ausweich-Relaxation: Punkte weichen von freien Elektronen und
+     Nachbarpaaren aus — Paare bewegen sich als Einheit. Broadphase:
+     ein gemeinsames Zellraster für Paare und freie Elektronen, damit
+     auch große Szenen (viele Ketten) schnell bleiben. */
+  const h = PAAR_ABSTAND / 2,
+    MINAB = PAAR_ABSTAND + 1;
+  const pkt = (P, s) => ({ x: P.cx + P.px * s * h, y: P.cy + P.py * s * h });
+  const ZELLE = 72,
+    ZOFF = 5000;
+  const raster = new Map();
+  const einfuegen = (kx, ky, wert) => {
+    const k = (kx + ZOFF) * 10007 + (ky + ZOFF);
+    let liste = raster.get(k);
+    if (!liste) {
+      liste = { p: [], l: [] };
+      raster.set(k, liste);
+    }
+    liste.p.push(wert);
+  };
+  for (let i = 0; i < paare.length; i++) {
+    einfuegen(Math.floor(paare[i].cx / ZELLE), Math.floor(paare[i].cy / ZELLE), i);
+  }
+  const loneZellen = new Map();
+  for (let i = 0; i < lone.length; i++) {
+    const k = (Math.floor(lone[i].x / ZELLE) + ZOFF) * 10007 + (Math.floor(lone[i].y / ZELLE) + ZOFF);
+    let liste = loneZellen.get(k);
+    if (!liste) {
+      liste = [];
+      loneZellen.set(k, liste);
+    }
+    liste.push(i);
+  }
+  for (let iter = 0; iter < 5; iter++) {
+    let bewegt = false;
+    for (let i = 0; i < paare.length; i++) {
+      const P = paare[i];
+      if (!isFinite(P.cx) || !isFinite(P.cy)) continue;
+      let sx = 0,
+        sy = 0;
+      const kx = Math.floor(P.cx / ZELLE),
+        ky = Math.floor(P.cy / ZELLE);
+      for (const s of [1, -1]) {
+        const p = pkt(P, s);
+        const lx = Math.floor(p.x / ZELLE) + ZOFF,
+          ly = Math.floor(p.y / ZELLE) + ZOFF;
+        for (let dzx = -1; dzx <= 1; dzx++)
+          for (let dzy = -1; dzy <= 1; dzy++) {
+            const liste = loneZellen.get((lx + dzx) * 10007 + (ly + dzy));
+            if (liste) {
+              for (const j of liste) {
+                const L = lone[j];
+                const ddx = p.x - L.x,
+                  ddy = p.y - L.y;
+                const dd = Math.hypot(ddx, ddy);
+                if (dd > 0.01 && dd < MINAB) {
+                  sx += (ddx / dd) * (MINAB - dd);
+                  sy += (ddy / dd) * (MINAB - dd);
+                }
+              }
+            }
+            const zelle = raster.get((lx + dzx) * 10007 + (ly + dzy));
+            if (zelle) {
+              for (const j of zelle.p) {
+                if (j === i || paare[j].b === P.b) continue;
+                const Q = paare[j];
+                for (const s2 of [1, -1]) {
+                  const q = pkt(Q, s2);
+                  const ddx = p.x - q.x,
+                    ddy = p.y - q.y;
+                  const dd = Math.hypot(ddx, ddy);
+                  if (dd > 0.01 && dd < MINAB) {
+                    sx += (ddx / dd) * (MINAB - dd) * 0.5;
+                    sy += (ddy / dd) * (MINAB - dd) * 0.5;
+                  }
+                }
+              }
+            }
+          }
+      }
+      if (sx || sy) {
+        P.cx += sx * 0.62;
+        P.cy += sy * 0.62;
+        bewegt = true;
+      }
+    }
+    if (!bewegt) break;
+  }
+  return paare;
+}
+
+/* Paare einer Ebene zeichnen (oben = gezogener Verband). Die zwei
+   Punkte gehören je einem Atom — der Ring trägt die Schalenfarbe des
+   besitzenden Atoms (man sieht, wessen Elektron wo sitzt). */
+function drawBondPaare(paare, sichtbar, oben) {
+  const h = PAAR_ABSTAND / 2;
+  for (const P of paare) {
+    const b = P.b;
+    if (b.a.dead || b.b.dead) continue;
+    if ((b.a.held || b.b.held) !== oben) continue;
+    if (!sichtbar.has(b.a) && !sichtbar.has(b.b)) continue;
+    const pair = b.pairs[P.i];
+    if (!pair) continue;
+    const sc = easeOutBack(clamp((now() - b.born) / 0.4, 0, 1));
+    if (sc <= 0.02) continue;
+    ctx.save();
+    ctx.translate(P.cx, P.cy);
+    if (sc < 1) ctx.scale(sc, sc);
+    drawElectronBubble(P.px * h, P.py * h, tintOf(b.a), false);
+    drawElectronBubble(-P.px * h, -P.py * h, tintOf(b.b), false);
+    ctx.restore();
+  }
 }
 
 function drawIonLine(b) {
@@ -10886,35 +11566,46 @@ function drawCore(a) {
     ctx.setLineDash([]);
   }
   /* Gemeinsame Größenfindung: Symbol + Marke = eine Gruppe, die in
-     den Kreis passen muss. Beide schrumpfen proportional mit. */
+     den Kreis passen muss. Beide schrumpfen proportional mit.
+     Font-Messungen werden pro Atom gecacht (drawCore läuft 60×/s). */
   const gap = 3,
     pad = 3;
   const avail = (sr - pad) * 2;
-  let fs = clamp(sr * 0.95, 15, 26);
-  for (let pass = 0; pass < 4; pass++) {
-    ctx.font = `700 ${Math.round(fs)}px ${FONT}`;
-    const sw0 = ctx.measureText(a.el.sym).width;
-    let need = sw0;
-    if (mark) {
-      const mf0 = Math.max(7, fs * 0.52);
-      ctx.font = `700 ${Math.round(mf0)}px ${FONT}`;
-      const qw0 = ctx.measureText(mark).width;
-      need = sw0 + gap + 2 * (qw0 / 2 + 2);
+  const ckey = (mark || "-") + "|" + Math.round(sr);
+  let fs, sw, mf, qw, mr;
+  if (a._fontC && a._fontC.key === ckey) {
+    fs = a._fontC.fs;
+    sw = a._fontC.sw;
+    mf = a._fontC.mf;
+    qw = a._fontC.qw;
+    mr = a._fontC.mr;
+  } else {
+    fs = clamp(sr * 0.95, 15, 26);
+    for (let pass = 0; pass < 4; pass++) {
+      ctx.font = `700 ${Math.round(fs)}px ${FONT}`;
+      const sw0 = ctx.measureText(a.el.sym).width;
+      let need = sw0;
+      if (mark) {
+        const mf0 = Math.max(7, fs * 0.52);
+        ctx.font = `700 ${Math.round(mf0)}px ${FONT}`;
+        const qw0 = ctx.measureText(mark).width;
+        need = sw0 + gap + 2 * (qw0 / 2 + 2);
+      }
+      if (need <= avail) break;
+      fs = Math.max(8, (fs * avail) / need);
     }
-    if (need <= avail) break;
-    fs = Math.max(8, (fs * avail) / need);
-  }
-  // finale, konsistente Werte
-  ctx.font = `700 ${Math.round(fs)}px ${FONT}`;
-  const sw = ctx.measureText(a.el.sym).width;
-  let mf = 0,
-    qw = 0,
+    ctx.font = `700 ${Math.round(fs)}px ${FONT}`;
+    sw = ctx.measureText(a.el.sym).width;
+    mf = 0;
+    qw = 0;
     mr = 0;
-  if (mark) {
-    mf = Math.max(7, fs * 0.52);
-    ctx.font = `700 ${Math.round(mf)}px ${FONT}`;
-    qw = ctx.measureText(mark).width;
-    mr = qw / 2 + 2;
+    if (mark) {
+      mf = Math.max(7, fs * 0.52);
+      ctx.font = `700 ${Math.round(mf)}px ${FONT}`;
+      qw = ctx.measureText(mark).width;
+      mr = qw / 2 + 2;
+    }
+    a._fontC = { key: ckey, fs: fs, sw: sw, mf: mf, qw: qw, mr: mr };
   }
   const gx = mark ? -(gap + 2 * mr) / 2 : 0; // Gruppe zentrieren
   ctx.textAlign = "center";
@@ -10996,8 +11687,15 @@ function renderWorld() {
   const unten = [],
     oben = [];
   for (const a of atoms) (a.held && !a.dead ? oben : unten).push(a);
+  const allePaare = bondPaarPunkte();
+  /* Sichtbarkeits-Culling: nur Atome im Blick zeichnen (große Szenen) */
+  const sichtbar = new Set();
+  for (const a of atoms) {
+    if (a.pos.x + a.edge + 80 > L && a.pos.x - a.edge - 80 < R2 && a.pos.y + a.edge + 80 > T && a.pos.y - a.edge - 80 < B2) sichtbar.add(a);
+  }
 
   for (const a of unten) {
+    if (!sichtbar.has(a)) continue;
     try {
       ctx.globalAlpha = 0.1;
       outerPath(a);
@@ -11026,15 +11724,21 @@ function renderWorld() {
     ctx.setLineDash([]);
   }
   for (const a of unten) {
+    if (!sichtbar.has(a)) continue;
     try {
       withSpawnScale(a, () => drawShells(a));
     } catch (err) {
       console.error("[drawShells]", err);
     }
   }
+  try {
+    drawBondPaare(allePaare, sichtbar, false);
+  } catch (err) {
+    console.error("[drawBondPaare]", err);
+  }
   for (let k = unten.length - 1; k >= 0; k--) {
     const a = unten[k];
-    if (a.dead) continue;
+    if (a.dead || !sichtbar.has(a)) continue;
     try {
       withSpawnScale(a, () => drawCore(a));
     } catch (err) {
@@ -11054,11 +11758,17 @@ function renderWorld() {
   /* --- obere Ebene: Schatten → Schalen → Kerne --- */
   for (const a of oben) drawDragSchatten(a);
   for (const a of oben) {
+    if (!sichtbar.has(a)) continue;
     try {
       withSpawnScale(a, () => drawShells(a));
     } catch (err) {
       console.error("[drawShells]", err);
     }
+  }
+  try {
+    drawBondPaare(allePaare, sichtbar, true);
+  } catch (err) {
+    console.error("[drawBondPaare]", err);
   }
   try {
     for (const tw of tweens) drawElectronBubble(tw.pos.x, tw.pos.y, tintOf(tw.e.atom), false);
@@ -11067,6 +11777,7 @@ function renderWorld() {
   }
   for (let k = oben.length - 1; k >= 0; k--) {
     const a = oben[k];
+    if (!sichtbar.has(a)) continue;
     try {
       withSpawnScale(a, () => drawCore(a));
     } catch (err) {
@@ -11107,7 +11818,8 @@ function drawDragSchatten(a) {
 /* =====================================================================
    ui.js — Kamera, Eingabe (Maus + Touch), Leiste oben rechts,
    Beispiele-Dropdown, Toasts, Hauptschleife. Lädt als LETZTES.
-   Touch: 2 Finger = Verschieben · Pinch = Zoom (Totzone) ·
+   Touch: 3 Finger = Bühne verschieben · Pinch = Zoom (Totzone) ·
+   Touchpad = Verschieben mit einem Finger ·
    Doppelklick/Doppeltap auf ein Atom = löschen · Bindung = Ordnungs-Zyklus.
    Tafel-tauglich: UI_SCALE skaliert Hit-Targets und Gesten.
    ===================================================================== */
@@ -11273,6 +11985,156 @@ function toast(msg, typ) {
   }, 2600);
 }
 
+/* ---------- Touchpad: ein Finger schiebt die Bühne ----------
+   Erscheint, sobald Touch als Eingabe erkannt wird. Der Knopf gibt den
+   Schub als Geschwindigkeit weiter (aneinander anschließend an 3-Finger-
+   Pan); am Griff oben lässt sich das Pad überallhin verschieben, das
+   ✕ blendet es aus (3-Finger-Bedienung holt es zurück). Position bleibt
+   über localStorage erhalten. */
+const TPad = (function () {
+  const el = document.getElementById("touchpad");
+  const pad = document.getElementById("tpPad");
+  const knob = document.getElementById("tpKnob");
+  const handle = document.getElementById("tpHandle");
+  const zu = document.getElementById("tpZu");
+  const SPEICHER = "bw_touchpad_pos";
+  const SCHUB = 7.5; /* Knopf-px → Bildschirm-px/s */
+  let vx = 0,
+    vy = 0;
+  let knobId = null,
+    kx0 = 0,
+    ky0 = 0;
+  let padId = null,
+    px0 = 0,
+    py0 = 0,
+    ex0 = 0,
+    ey0 = 0;
+  let zuGezaehlt = false;
+
+  /* Größe an die Bühnenskalierung anpassen (Whiteboard-tauglich) */
+  const SEITE = Math.round(clamp(128 * UI_SCALE, 128, 210));
+  const KNOPF = Math.round(SEITE * 0.4);
+  const MAXR = (SEITE - KNOPF) / 2 - 4;
+  pad.style.width = SEITE + "px";
+  pad.style.height = SEITE + "px";
+  knob.style.width = KNOPF + "px";
+  knob.style.height = KNOPF + "px";
+  knob.style.margin = -KNOPF / 2 + "px 0 0 " + -KNOPF / 2 + "px";
+
+  try {
+    const p = JSON.parse(localStorage.getItem(SPEICHER) || "null");
+    if (p && isFinite(p.x) && isFinite(p.y)) {
+      el.style.left = clamp(p.x, 6, Math.max(6, innerWidth - 160)) + "px";
+      el.style.top = clamp(p.y, 6, Math.max(6, innerHeight - 220)) + "px";
+      el.style.right = "auto";
+      el.style.bottom = "auto";
+    }
+  } catch (err) {}
+
+  function speichere() {
+    try {
+      const r = el.getBoundingClientRect();
+      localStorage.setItem(SPEICHER, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) }));
+    } catch (err) {}
+  }
+
+  pad.addEventListener("pointerdown", (e) => {
+    if (knobId !== null) return;
+    knobId = e.pointerId;
+    try {
+      pad.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    const r = pad.getBoundingClientRect();
+    kx0 = r.left + r.width / 2;
+    ky0 = r.top + r.height / 2;
+    pad.classList.add("zieht");
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  pad.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== knobId) return;
+    let dx = e.clientX - kx0,
+      dy = e.clientY - ky0;
+    const d = Math.hypot(dx, dy);
+    if (d > MAXR) {
+      dx = (dx / d) * MAXR;
+      dy = (dy / d) * MAXR;
+    }
+    knob.style.transform = "translate(" + dx + "px," + dy + "px)";
+    vx = dx * SCHUB;
+    vy = dy * SCHUB;
+    e.preventDefault();
+  });
+  function knobLos(e) {
+    if (e.pointerId !== knobId) return;
+    knobId = null;
+    pad.classList.remove("zieht");
+    knob.style.transform = "translate(0px,0px)";
+    vx = 0;
+    vy = 0;
+  }
+  pad.addEventListener("pointerup", knobLos);
+  pad.addEventListener("pointercancel", knobLos);
+
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.target === zu || (zu && zu.contains(e.target))) return;
+    padId = e.pointerId;
+    try {
+      handle.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    const r = el.getBoundingClientRect();
+    ex0 = r.left;
+    ey0 = r.top;
+    px0 = e.clientX;
+    py0 = e.clientY;
+    el.style.left = ex0 + "px";
+    el.style.top = ey0 + "px";
+    el.style.right = "auto";
+    el.style.bottom = "auto";
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (e.pointerId !== padId) return;
+    const nx = clamp(ex0 + e.clientX - px0, 6, Math.max(6, innerWidth - el.offsetWidth - 6));
+    const ny = clamp(ey0 + e.clientY - py0, 6, Math.max(6, innerHeight - el.offsetHeight - 6));
+    el.style.left = nx + "px";
+    el.style.top = ny + "px";
+    e.preventDefault();
+  });
+  function handleLos(e) {
+    if (e.pointerId !== padId) return;
+    padId = null;
+    speichere();
+  }
+  handle.addEventListener("pointerup", handleLos);
+  handle.addEventListener("pointercancel", handleLos);
+
+  zu.addEventListener("click", (e) => {
+    e.stopPropagation();
+    zuGezaehlt = true;
+    el.classList.remove("da");
+    vx = 0;
+    vy = 0;
+  });
+
+  /* Touch erkannt → Bedienfeld einblenden (drei = ausdrücklich) */
+  function erkannt(drei) {
+    document.body.classList.add("touch");
+    if (drei) zuGezaehlt = false;
+    if (!zuGezaehlt) el.classList.add("da");
+  }
+
+  function tick(dt) {
+    if (knobId === null || (vx === 0 && vy === 0)) return;
+    camGoal = null;
+    cam.x -= (vx * dt) / cam.z;
+    cam.y -= (vy * dt) / cam.z;
+  }
+
+  return { tick, erkannt };
+})();
+
 /* ---------- Leiste: Buttons ---------- */
 document.getElementById("btnPse").addEventListener("click", goPSE);
 document.getElementById("btnClear").addEventListener("click", clearAll);
@@ -11304,7 +12166,7 @@ btnRaum.addEventListener("click", () => {
   }
   toast(
     Raum.an
-      ? "3D-Lewis-Modus: VSEPR-Geometrie. Leere Fläche ziehen = verschieben · rechte Maustaste / 3 Finger = drehen."
+      ? "3D-Lewis-Modus: VSEPR-Geometrie. Drehen: rechte Maustaste (Maus) · ein Finger auf freier Fläche (Touch). Verschieben: drei Finger / Touchpad."
       : "Zurück zum Schalenmodell.",
   );
 });
@@ -11484,6 +12346,7 @@ const FORMELN_GRUPPEN = [
       ["Aceton", "Aceton"],
       ["Ameisensäure", "Ameisensäure"],
       ["Essigsäure", "Essigsäure"],
+      ["Zitronensäure", "Zitronensäure"],
       ["Benzaldehyd", "Benzaldehyd"],
       ["Phenol", "Phenol"],
       ["Chlorbenzol", "Chlorbenzol"],
@@ -11537,12 +12400,150 @@ const ALKANOLE = [
 
 const ALKENE = ["Ethen", "Propen", "But-1-en", "Pent-1-en", "Hex-1-en", "Hept-1-en", "Oct-1-en", "Non-1-en", "Dec-1-en"];
 
+/* ---------- Szenen-Baumeister (Stoffmengen, Gitter, Löslichkeit) ---------- */
+let szeneLaeuft = 0;
+function szeneStart() {
+  szeneLaeuft++;
+  if (typeof Undo !== "undefined") {
+    if (atoms.length) Undo.push();
+    if (Undo.setPause) Undo.setPause(true);
+  }
+  clearAll();
+  return szeneLaeuft;
+}
+function szeneEnde(tok, spaeter) {
+  setTimeout(() => {
+    if (tok !== szeneLaeuft) return; /* inzwischen andere Szene gestartet */
+    if (typeof Undo !== "undefined" && Undo.setPause) Undo.setPause(false);
+    fitAtoms();
+  }, spaeter || 60);
+}
+/* Ionen-Gitter als Schachbrett: n×n Ionen, abwechselnd +/− */
+function szeneGitter(kat, katQ, an, anQ, n, abstand) {
+  const AB = abstand || 175;
+  return function () {
+    const tok = szeneStart();
+    const halb = ((n - 1) * AB) / 2;
+    STAGE.hw = Math.max(680, halb + 640);
+    STAGE.hh = Math.max(380, halb * 0.9 + 430);
+    if (typeof Regeln !== "undefined" && Regeln.baueEinzelIon) {
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          const katSeite = (r + c) % 2 === 0;
+          Regeln.baueEinzelIon(katSeite ? kat : an, katSeite ? katQ : anQ, STAGE.x - halb + c * AB, STAGE.y - halb + r * AB);
+        }
+    }
+    szeneEnde(tok, 80);
+    toast(n * n + " Ionen: ungleichnamige ziehen sich an, gleichnamige stoßen sich ab — das Schachbrett-Gitter bleibt stabil.");
+  };
+}
+/* Salz-Kristall im Wasser: Ionen-Basis + H₂O-Ring → Hydrathüllen */
+function szeneSalzWasser() {
+  return function () {
+    const tok = szeneStart();
+    const n = 3,
+      AB = 175,
+      halb = ((n - 1) * AB) / 2;
+    STAGE.hw = Math.max(680, halb + 980);
+    STAGE.hh = Math.max(380, halb * 0.9 + 640);
+    if (typeof Regeln !== "undefined" && Regeln.baueEinzelIon) {
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          const katSeite = (r + c) % 2 === 0;
+          Regeln.baueEinzelIon(katSeite ? "Na" : "Cl", katSeite ? 1 : -1, STAGE.x - halb + c * AB, STAGE.y - halb + r * AB);
+        }
+    }
+    const nW = 14;
+    for (let i = 0; i < nW; i++) {
+      const th = (i / nW) * TAU + 0.32,
+        R = halb + 340 + (i % 2) * 150;
+      setTimeout(() => {
+        if (tok === szeneLaeuft) buildFromFormula("H2O", { x: STAGE.x + Math.cos(th) * R, y: STAGE.y + Math.sin(th) * R * 0.82 }, true);
+      }, 260 + i * 230);
+    }
+    szeneEnde(tok, 260 + nW * 230 + 800);
+    toast("Salz in Wasser: die δ-Zentren der H₂O umlagern die Ionen (Hydrathülle) — Rand-Ionen lassen sich ins Wasser ziehen.");
+  };
+}
+/* Gelöst: getrennte Ionen, jedes mit eigener Hydrathülle */
+function szeneGeloest() {
+  return function () {
+    const tok = szeneStart();
+    STAGE.hw = Math.max(680, 1180);
+    STAGE.hh = Math.max(380, 780);
+    const zentren = [
+      [-560, -300, "Na", 1],
+      [560, -300, "Cl", -1],
+      [-560, 320, "Cl", -1],
+      [560, 320, "Na", 1],
+      [0, -420, "Na", 1],
+      [0, 440, "Cl", -1],
+    ];
+    let w = 0;
+    for (const z of zentren) {
+      if (typeof Regeln !== "undefined" && Regeln.baueEinzelIon) Regeln.baueEinzelIon(z[2], z[3], STAGE.x + z[0], STAGE.y + z[1]);
+      for (let k = 0; k < 4; k++) {
+        const th = (k / 4) * TAU + 0.4,
+          R = 300;
+        setTimeout(() => {
+          if (tok === szeneLaeuft) buildFromFormula("H2O", { x: STAGE.x + z[0] + Math.cos(th) * R, y: STAGE.y + z[1] + Math.sin(th) * R }, true);
+        }, 200 + w * 150);
+        w++;
+      }
+    }
+    szeneEnde(tok, 200 + w * 150 + 800);
+    toast("Gelöst: jedes Ion trägt seine Hydrathülle — so wandern Ionen durch die Lösung.");
+  };
+}
+/* Raster aus vielen gleichen Molekülen (Stoffmenge / Viskosität) */
+function szeneViele(name, rows, cols, dx, dy) {
+  const teile = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) teile.push([name, (c - (cols - 1) / 2) * dx, (r - (rows - 1) / 2) * dy]);
+  return teile;
+}
+const SZ_PENT_NONAN = (function () {
+  const teile = [];
+  for (let i = 0; i < 4; i++) teile.push(["Pentan", -1000, -380 + i * 250]);
+  for (let i = 0; i < 3; i++) teile.push(["Nonan", 1000, -250 + i * 250]);
+  return teile;
+})();
+const SZ_ZITRONE_WASSER = (function () {
+  const teile = [
+    ["Zitronensäure", -430, -250],
+    ["Zitronensäure", 430, -250],
+    ["Zitronensäure", 0, 300],
+  ];
+  for (let i = 0; i < 10; i++) {
+    const th = (i / 10) * TAU + 0.3,
+      R = 800 + (i % 2) * 140;
+    teile.push(["H2O", Math.round(Math.cos(th) * R), Math.round(Math.sin(th) * R * 0.78)]);
+  }
+  return teile;
+})();
+
 const SZENEN_GRUPPEN = [
+  {
+    titel: "Stoffmengen & Löslichkeit",
+    offen: false,
+    szenen: [
+      ["NaCl-Gitter (16 Ionen)", szeneGitter("Na", 1, "Cl", -1, 4)],
+      ["NaCl-Gitter (36 Ionen)", szeneGitter("Na", 1, "Cl", -1, 6)],
+      ["Salz in Wasser (Löslichkeit)", szeneSalzWasser()],
+      ["Gelöst: hydratisierte Ionen", szeneGeloest()],
+      ["Pentan ×10 (dünnflüssig)", szeneViele("Pentan", 5, 2, 690, 240)],
+      ["Nonan ×8 (zähflüssig)", szeneViele("Nonan", 4, 2, 1270, 240)],
+      ["Pentan vs. Nonan (Viskosität)", SZ_PENT_NONAN],
+      ["Zitronensäure (1 Molekül)", [["Zitronensäure", 0, 0]]],
+      ["Zitronensäure in Wasser (3× + 10 H₂O)", SZ_ZITRONE_WASSER],
+    ],
+  },
   {
     titel: "Säure-Base & Ionen",
     offen: false,
     szenen: [
       ["Säure + Wasser (HCl)", paar("HCl", "H2O")],
+      ["Zitronensäure + Wasser (Protonenübertragung)", paar("Zitronensäure", "H2O")],
       ["Neutralisation", paar("H3O+", "OH-")],
       ["Ammoniak + HCl → NH₄⁺", paar("NH3", "HCl")],
       [
@@ -11671,17 +12672,23 @@ SZENEN_GRUPPEN.forEach((g) => {
       b.textContent = name;
       b.addEventListener("click", () => {
         drop.classList.remove("open");
-        baueSzene(teile);
+        if (typeof teile === "function") teile();
+        else baueSzene(teile);
       });
       inhalt.appendChild(b);
     });
   });
 });
 
-/* ---------- Eingabe: Maus + Touch ---------- */
+/* ---------- Eingabe: Maus + Touch ----------
+   Touch: 3 Finger = Bühne verschieben · 2 Finger = Pinch-Zoom (Totzone) ·
+   1 Finger = Atome greifen / PSE antippen (freie Fläche: 2D still,
+   3D-Modus: drehen). Verschieben mit EINEM Finger über das Touchpad
+   unten rechts (verschiebbar, TPad). Maus wie bisher: Ziehen = schieben,
+   rechte Taste = 3D drehen, Rad = zoomen. */
 const pointers = new Map();
 let pinch = null;
-let rot3 = null;
+let pan3 = null;
 let lastTap = null;
 let lastDeleteT = 0;
 let lastPseSpawn = null;
@@ -11702,6 +12709,8 @@ function distOf() {
 }
 
 canvas.addEventListener("pointerdown", (e) => {
+  const istTouch = e.pointerType === "touch";
+  if (istTouch && typeof TPad !== "undefined") TPad.erkannt(false);
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
   /* FIX: Wertigkeits-Pfad VOR dem Palm-Check — mit eigenem w.
@@ -11717,11 +12726,17 @@ canvas.addEventListener("pointerdown", (e) => {
     if (st) {
       drag = { mode: "wert", stein: st, ox: st.x - mw.x, oy: st.y - mw.y };
       st.held = true;
-      canvas.setPointerCapture(e.pointerId);
+      try {
+        try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch (err) {}
+      } catch (err) {}
       return;
     }
     drag = { mode: "pan", sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y, downW: mw, moved: false };
+    try {
     canvas.setPointerCapture(e.pointerId);
+  } catch (err) {}
     return;
   }
 
@@ -11738,13 +12753,15 @@ canvas.addEventListener("pointerdown", (e) => {
       }
       drag = null;
       pinch = null;
-      rot3 = null;
+      pan3 = null;
     }
     return;
   }
   if (palmPause) return;
 
-  canvas.setPointerCapture(e.pointerId);
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch (err) {}
 
   const loeseDrag = () => {
     if (drag && drag.member) drag.member.forEach((mm) => (mm.held = false));
@@ -11761,16 +12778,24 @@ canvas.addEventListener("pointerdown", (e) => {
     canvas.style.cursor = "default";
   };
 
+  /* drei Finger: Bühne verschieben (Touch — in jedem Modus) */
   if (pointers.size === 3) {
     loeseDrag();
     pinch = null;
     const arr = [...pointers.values()];
-    rot3 = { x: (arr[0].x + arr[1].x + arr[2].x) / 3, y: (arr[0].y + arr[1].y + arr[2].y) / 3 };
+    pan3 = {
+      cx: (arr[0].x + arr[1].x + arr[2].x) / 3,
+      cy: (arr[0].y + arr[1].y + arr[2].y) / 3,
+      camX: cam.x,
+      camY: cam.y,
+    };
+    if (istTouch && typeof TPad !== "undefined") TPad.erkannt(true);
     return;
   }
   if (pointers.size === 2) {
     loeseDrag();
-    pinch = { d0: distOf(), dPrev: distOf(), armed: false, midPrev: midOf() };
+    pan3 = null;
+    pinch = { d0: distOf(), dPrev: distOf(), armed: false };
     return;
   }
 
@@ -11796,8 +12821,21 @@ canvas.addEventListener("pointerdown", (e) => {
   if (slot || a) {
     camGoal = null;
     drag = { mode: "click", start: w, last: w, slot, atom: a, member: null };
+  } else if (istTouch && typeof Raum !== "undefined" && Raum.an) {
+    /* Touch im 3D-Modus: ein Finger auf freier Fläche dreht das Molekül */
+    drag = {
+      mode: "rotT",
+      sx: e.clientX,
+      sy: e.clientY,
+      moved: false,
+      rx: Raum.view.rx,
+      ry: Raum.view.ry,
+      downW: w,
+    };
   } else {
-    drag = { mode: "pan", sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y, downW: w, moved: false };
+    /* Touch im 2D-Modus: freie Fläche schiebt NICHT (dafür 3 Finger /
+       Touchpad) — Tap zum Spawnen/Verbinden bleibt erhalten. */
+    drag = { mode: "pan", sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y, downW: w, moved: false, touch: istTouch };
   }
 });
 
@@ -11817,26 +12855,20 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
 
-  /* drei Finger: 3D-Rotation */
-  if (rot3 && pointers.size >= 3) {
+  /* drei Finger: Bühne verschieben */
+  if (pan3 && pointers.size >= 3) {
     const arr = [...pointers.values()];
     const cx = (arr[0].x + arr[1].x + arr[2].x) / 3;
     const cy = (arr[0].y + arr[1].y + arr[2].y) / 3;
-    if (typeof Raum !== "undefined" && Raum.an) {
-      Raum.view.ry += (cx - rot3.x) * ROT_FAKTOR;
-      Raum.view.rx = clamp(Raum.view.rx + (cy - rot3.y) * ROT_FAKTOR, -1.45, 1.45);
-    }
-    rot3 = { x: cx, y: cy };
+    camGoal = null;
+    cam.x = pan3.camX - (cx - pan3.cx) / cam.z;
+    cam.y = pan3.camY - (cy - pan3.cy) / cam.z;
     return;
   }
 
-  /* zwei Finger: Pan + Pinch */
+  /* zwei Finger: Pinch-Zoom um den Mittelpunkt (Totzone) */
   if (pinch && pointers.size >= 2) {
     const mid = midOf();
-    cam.x -= (mid.x - pinch.midPrev.x) / cam.z;
-    cam.y -= (mid.y - pinch.midPrev.y) / cam.z;
-    pinch.midPrev = mid;
-    camGoal = null;
     const d = distOf();
     if (!pinch.armed && Math.abs(d - pinch.d0) > 100 * UI_SCALE) {
       pinch.armed = true;
@@ -11844,6 +12876,7 @@ canvas.addEventListener("pointermove", (e) => {
     }
     if (pinch.armed) {
       const before = screenToWorld(mid.x, mid.y);
+      camGoal = null;
       cam.z = clamp(cam.z * (d / pinch.dPrev), 0.25, 2.4);
       const after = screenToWorld(mid.x, mid.y);
       cam.x += before.x - after.x;
@@ -11877,10 +12910,21 @@ canvas.addEventListener("pointermove", (e) => {
     const dx = e.clientX - drag.sx,
       dy = e.clientY - drag.sy;
     if (Math.hypot(dx, dy) > 4 + 4 * UI_SCALE) drag.moved = true;
-    if (drag.moved) {
+    /* Touch schiebt die freie Fläche nicht — dafür 3 Finger / Touchpad */
+    if (drag.moved && !drag.touch) {
       camGoal = null;
       cam.x = drag.cx - dx / cam.z;
       cam.y = drag.cy - dy / cam.z;
+    }
+    return;
+  }
+  if (drag.mode === "rotT") {
+    const dx = e.clientX - drag.sx,
+      dy = e.clientY - drag.sy;
+    if (Math.hypot(dx, dy) > 4 + 4 * UI_SCALE) drag.moved = true;
+    if (drag.moved && typeof Raum !== "undefined" && Raum.an) {
+      Raum.view.ry = drag.ry + dx * ROT_FAKTOR;
+      Raum.view.rx = clamp(drag.rx + dy * ROT_FAKTOR, -1.45, 1.45);
     }
     return;
   }
@@ -11888,7 +12932,9 @@ canvas.addEventListener("pointermove", (e) => {
   if (drag.mode === "click") {
     if (Math.hypot(w.x - drag.start.x, w.y - drag.start.y) > 6 / Math.max(cam.z, 0.2)) {
       drag.mode = "drag";
-      drag.member = cutMode || (typeof Raum !== "undefined" && Raum.an) ? [drag.atom] : bondComponent(drag.atom);
+      /* Ganzes Molekül greifen — im 3D-Modus genauso wie im 2D-Modus.
+         Nur der Trennmodus (Schere) greift das einzelne Atom. */
+      drag.member = cutMode ? [drag.atom] : bondComponent(drag.atom);
       drag.member.forEach((mm) => (mm.held = true));
       canvas.style.cursor = "grabbing";
     }
@@ -11909,7 +12955,11 @@ canvas.addEventListener("pointermove", (e) => {
 function endPointer(e) {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
-  if (pointers.size < 3) rot3 = null;
+  if (pointers.size < 3) pan3 = null;
+  /* 3 → 2 Finger: Pinch direkt weiterführen */
+  if (pointers.size === 2 && !pinch && !palmPause) {
+    pinch = { d0: distOf(), dPrev: distOf(), armed: true };
+  }
 
   if (palmPause) {
     if (pointers.size <= 1) palmPause = false;
@@ -11922,7 +12972,9 @@ function endPointer(e) {
     return;
   }
 
-  if (pointers.size === 1 && !drag) {
+  /* Rest-Finger übernimmt das Pan nur bei der Maus — Touch verschiebt
+     über 3 Finger / Touchpad. */
+  if (pointers.size === 1 && !drag && e.pointerType !== "touch") {
     const p = [...pointers.values()][0];
     drag = { mode: "pan", sx: p.x, sy: p.y, cx: cam.x, cy: cam.y, moved: true, downW: null };
     return;
@@ -11953,7 +13005,7 @@ function endPointer(e) {
     drag = null;
     return;
   }
-  if (drag.mode === "pan") {
+  if (drag.mode === "pan" || drag.mode === "rotT") {
     if (!drag.moved && drag.downW) {
       infoKarte.hidden = true;
       const Z = pseHit(drag.downW.x, drag.downW.y);
@@ -12047,11 +13099,42 @@ canvas.addEventListener("dblclick", (e) => {
     toast(a.el.sym + " entfernt.");
     return;
   }
-  /* 3) Bindungs-Zyklus 1→2→3→1 — NUR die getroffene Bindung. */
+  /* 3) Bindungs-Zyklus 1→2→3→1 — NUR die getroffene Bindung.
+     Die Elektronenpaare wandern mit: erhöhen holt freie Elektronen
+     in die Bindung, senken entlässt sie zurück auf die Schalen. */
   const b = bondAt(w);
   if (b) {
     const vor = b.order;
     b.order = b.order >= 3 ? 1 : b.order + 1;
+    while (b.pairs.length > b.order) {
+      const pair = b.pairs.pop();
+      for (const e of [pair.eA, pair.eB]) {
+        if (!e || e.state === "gone") continue;
+        e.bond = null;
+        e.pairIndex = null;
+        e.role = null;
+        e.animFrom = isFinite(e.dispA) ? e.dispA : e.animFrom;
+        e.animT = 0;
+      }
+    }
+    while (b.pairs.length < b.order) {
+      const pa = pickElectron(b.a, Math.atan2(b.b.pos.y - b.a.pos.y, b.b.pos.x - b.a.pos.x));
+      const pb = pickElectron(b.b, Math.atan2(b.a.pos.y - b.b.pos.y, b.a.pos.x - b.b.pos.x) + Math.PI);
+      if (!pa || !pb) break;
+      for (const e of [pa.e, pb.e]) {
+        e.animFrom = isFinite(e.dispA) ? e.dispA : 0;
+        e.animT = 0;
+      }
+      pa.e.bond = b;
+      pa.e.pairIndex = b.pairs.length;
+      pa.e.role = "a";
+      pb.e.bond = b;
+      pb.e.pairIndex = b.pairs.length;
+      pb.e.role = "b";
+      b.pairs.push({ eA: pa.e, eB: pb.e });
+      b.a.relaxDirty = true;
+      b.b.relaxDirty = true;
+    }
     b.a.relaxDirty = true;
     b.b.relaxDirty = true;
     if (typeof gleicheValenzAus === "function") gleicheValenzAus(b, b.order);
@@ -12090,6 +13173,7 @@ function loop(t) {
     updateSlides(dt);
     updateElectronAnims(dt);
     tweenCam(dt);
+    TPad.tick(dt);
     proximitySearch();
     for (const a of atoms) maybeRelax(a);
     if (typeof Bronsted !== "undefined") Bronsted.tick();
@@ -12266,6 +13350,7 @@ const MOLEKUEL_DB = {
   CH2O: ["Methanal", "Formaldehyd — Konservierung, Desinfektion."],
   CH2O2: ["Ameisensäure", "In Brennnesseln — macht das Zungenbrennen."],
   C2H4O2: ["Essigsäure", "Hauptbestandteil von Essig."],
+  C6H8O7: ["Zitronensäure", "Dreibasige Säure der Zitrusfrüchte — Kalklöser, Konservierungsmittel (E 330)."],
   CHN: ["Cyanwasserstoff", "Blausäure — Bittermandelgeruch, hochgiftig.", "HCN"],
   C2H2: ["Ethin", "Acetylen — Dreifachbindung, Schweißgas."],
   H2O: ["Wasser", "Dipol mit Wasserstoffbrücken — Lösungsmittel des Lebens, Dichteanomalie."],
@@ -12303,6 +13388,15 @@ const MOLEKUEL_DB = {
   "CO32-": ["Carbonat-Ion", "Planar — Kalk, Muschelschalen.", "CO₃²⁻"],
   "ClO4-": ["Perchlorat-Ion", "Erweiterter Oktett am Cl.", "ClO₄⁻"],
   NaCl: ["Natriumchlorid", "Kochsalz — Ionengitter, Schmelze/Lösung leitet."],
+  "Na+": ["Natrium-Ion", "Edelgaskonfiguration (Neon) — hydratisiert das Kernion des Kochsalzes.", "Na⁺"],
+  "K+": ["Kalium-Ion", "Edelgaskonfiguration (Argon) — Dünger, Nervenleitung.", "K⁺"],
+  "Mg2+": ["Magnesium-Ion", "Edelgaskonfiguration (Neon) — Chlorophyll-Zentralatom.", "Mg²⁺"],
+  "Ca2+": ["Calcium-Ion", "Edelgaskonfiguration (Argon) — Knochen, Kalk, Zellwände.", "Ca²⁺"],
+  "Al3+": ["Aluminium-Ion", "Edelgaskonfiguration (Neon) — kleines, stark ladendes Kation.", "Al³⁺"],
+  "Cl-": ["Chlorid-Ion", "Edelgaskonfiguration (Argon) — das Anion des Kochsalzes.", "Cl⁻"],
+  "Br-": ["Bromid-Ion", "Edelgaskonfiguration (Krypton).", "Br⁻"],
+  "F-": ["Fluorid-Ion", "Edelgaskonfiguration (Neon) — Zahnschutz (Zahncreme).", "F⁻"],
+  "I-": ["Iodid-Ion", "Edelgaskonfiguration (Xenon) — Schilddrüse (Jodsalz).", "I⁻"],
   KCl: ["Kaliumchlorid", "Dünger, Streusalz-Ersatz."],
   MgCl2: ["Magnesiumchlorid", "Salzsole, Bindemittel."],
   CaCl2: ["Calciumchlorid", "Streusalz, Trocknungsmittel."],
