@@ -21,7 +21,9 @@ Works best with the Chrome Webbrowser!
 -----------------------------------------------------------------------------------------
 Patch-Notes
 
-feliz 0.5 fixed some bugs, added german language
+pse 0.35 tweaked navigation. added solvation examples. tweaked polar bonds visualization.
+
+feliz 0.5 (2.23) fixed some bugs, added german language
 
 2.2.2 you can now make precise selections in textboxes, when using touch as input.
 
